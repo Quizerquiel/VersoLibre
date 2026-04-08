@@ -791,9 +791,9 @@
       const { error } = await withTimeout(
         updateCurrentProfileViaRpc(
           {
-            name: trimmedName,
-            username: trimmedUsername,
-            bio: trimmedBio || "Sin biografia por ahora."
+            p_name: trimmedName,
+            p_username: trimmedUsername,
+            p_bio: trimmedBio || "Sin biografia por ahora."
           },
           "Guardar perfil"
         ),
@@ -877,10 +877,10 @@
       const { error } = await withTimeout(
         updateCurrentProfileViaRpc(
           {
-            email_visibility: settingsEmailVisibility,
-            profile_visibility: settingsProfileVisibility,
-            comment_permissions: settingsCommentPermissions,
-            sensitive_filter: settingsSensitiveFilter
+            p_email_visibility: settingsEmailVisibility,
+            p_profile_visibility: settingsProfileVisibility,
+            p_comment_permissions: settingsCommentPermissions,
+            p_sensitive_filter: settingsSensitiveFilter
           },
           "Guardar privacidad"
         ),
@@ -975,7 +975,7 @@
         const profileImage = String(reader.result || "");
         const { error } = await withTimeout(
           updateCurrentProfileViaRpc(
-            { profile_image: profileImage },
+            { p_profile_image: profileImage },
             "Guardar foto de perfil"
           ),
           10000,
