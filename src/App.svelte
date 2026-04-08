@@ -446,6 +446,44 @@
     }
   }
 
+  async function fetchProfileByIdViaRest(profileId, label) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return { error: new Error("Falta configurar Supabase en Vercel.") };
+    }
+
+    const accessToken = authSession?.access_token;
+    if (!accessToken) {
+      return { error: new Error("Tu sesion expiró. Inicia sesion de nuevo.") };
+    }
+
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(profileId)}&select=id,name,username,bio,profile_image,email_visibility,profile_visibility,comment_permissions,sensitive_filter`,
+        {
+          method: "GET",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${accessToken}`
+          }
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          data?.message ||
+          data?.error_description ||
+          data?.error ||
+          `${label} falló (${response.status}).`;
+        return { error: new Error(message) };
+      }
+
+      return { data: Array.isArray(data) ? data[0] || null : null, error: null };
+    } catch (error) {
+      return { error };
+    }
+  }
+
   async function toggleReaction(poemId, value) {
     if (!currentUser || !supabase) {
       flash("Inicia sesion para reaccionar.");
@@ -875,6 +913,46 @@
 
         if (fallback.error) {
           profileSettingsMessage = fallback.error.message || error.message || "No se pudo guardar la configuracion.";
+          return;
+        }
+      }
+
+      const verify = await withTimeout(
+        fetchProfileByIdViaRest(currentUser.id, "Verificar perfil"),
+        10000,
+        "Verificar perfil"
+      );
+
+      const persistedMatches =
+        !verify.error &&
+        verify.data &&
+        String(verify.data.name || "") === trimmedName &&
+        String(verify.data.username || "") === trimmedUsername &&
+        String(verify.data.bio || "") === (trimmedBio || "Sin biografia por ahora.");
+
+      if (!persistedMatches) {
+        const retryPayload = {
+          id: currentUser.id,
+          email: currentUser.email || authUser?.email || "",
+          name: trimmedName,
+          username: trimmedUsername,
+          bio: trimmedBio || "Sin biografia por ahora.",
+          role: currentUser.role || "user",
+          profile_visibility: currentUser.profileVisibility || "public",
+          email_visibility: currentUser.emailVisibility || "private",
+          comment_permissions: currentUser.commentPermissions || "registered",
+          sensitive_filter: currentUser.sensitiveFilter ?? true,
+          profile_image: currentUser.profileImage || ""
+        };
+
+        const retry = await withTimeout(
+          upsertProfileFullViaRest(retryPayload, "Reintentar guardar perfil"),
+          10000,
+          "Reintentar guardar perfil"
+        );
+
+        if (retry.error) {
+          profileSettingsMessage = retry.error.message || "No se pudo confirmar el guardado del perfil.";
           return;
         }
       }
