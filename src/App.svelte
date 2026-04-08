@@ -30,7 +30,6 @@
   let authUser = null;
   let authSession = null;
   let sessionUserId = "";
-  let authReady = false;
   let currentPath = "/";
   let visibleCount = FEED_BATCH;
   let searchQuery = "";
@@ -193,11 +192,9 @@
   async function bootstrapState() {
     if (!isSupabaseConfigured || !supabase) {
       announcement = "Configura Supabase para activar autenticacion y base de datos real.";
-      authReady = true;
       return;
     }
 
-    authReady = false;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       authSession = session || null;
@@ -206,9 +203,7 @@
       if (authUser) {
         void ensureProfile(authUser);
       }
-    } finally {
-      authReady = true;
-    }
+    } finally {}
 
     refreshData().catch(() => {});
   }
@@ -300,40 +295,6 @@
 
   function validEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  }
-
-  function persistSession(session) {
-    if (!session) {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-      return;
-    }
-
-    localStorage.setItem(
-      SESSION_STORAGE_KEY,
-      JSON.stringify({
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        expires_at: session.expires_at,
-        token_type: session.token_type,
-        user: session.user
-      })
-    );
-  }
-
-  async function restorePersistedSession() {
-    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!stored) return;
-
-    try {
-      const parsed = JSON.parse(stored);
-      if (!parsed?.access_token || !parsed?.refresh_token) return;
-      await supabase.auth.setSession({
-        access_token: parsed.access_token,
-        refresh_token: parsed.refresh_token
-      });
-    } catch (error) {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-    }
   }
 
   function isTransientLockError(error) {
@@ -1080,9 +1041,6 @@
           comments = [];
         }
 
-        if (["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED", "SIGNED_OUT"].includes(event)) {
-          authReady = true;
-        }
       });
       authListener = authSubscription?.data?.subscription || null;
 
@@ -1620,12 +1578,7 @@
       </section>
     {:else if currentPath === "/perfil"}
       <section class="profile-shell">
-        {#if !authReady}
-          <div class="gate-panel">
-            <h3>Cargando tu sesión...</h3>
-            <p>Estamos restaurando tu acceso, un momento.</p>
-          </div>
-        {:else if currentUser}
+        {#if currentUser}
           <aside class="profile-card">
             <input
               bind:this={profilePhotoInput}
@@ -1795,12 +1748,7 @@
       </section>
     {:else if currentPath === "/configuracion"}
       <section class="page-card">
-        {#if !authReady}
-          <div class="gate-panel">
-            <h3>Cargando tu sesión...</h3>
-            <p>Estamos restaurando tu acceso, un momento.</p>
-          </div>
-        {:else if currentUser}
+        {#if currentUser}
           <section class="settings-panel standalone-settings">
             <div class="section-title">
               <div>
