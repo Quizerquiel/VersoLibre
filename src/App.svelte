@@ -199,6 +199,9 @@
     authSession = session || null;
     authUser = session?.user || null;
     sessionUserId = authUser?.id || "";
+    if (authUser) {
+      await ensureProfile(authUser);
+    }
     await refreshData();
   }
 
@@ -395,6 +398,18 @@
         return { error: new Error(error.message || `${label} falló.`) };
       }
 
+      if (authUser) {
+        authUser = {
+          ...authUser,
+          user_metadata: {
+            ...(authUser.user_metadata || {}),
+            name: data?.name || authUser.user_metadata?.name,
+            username: data?.username || authUser.user_metadata?.username,
+            bio: data?.bio || authUser.user_metadata?.bio
+          }
+        };
+      }
+
       return { data, error: null };
     } catch (error) {
       return { error };
@@ -406,11 +421,7 @@
       return { data: null, error: new Error("Falta configurar Supabase en Vercel.") };
     }
 
-    const query = sessionUserId
-      ? supabase.from("profiles").select("*").eq("id", sessionUserId)
-      : supabase.from("profiles").select("*");
-
-    const { data, error } = await query;
+    const { data, error } = await supabase.from("profiles").select("*");
     return { data: data || [], error };
   }
 
@@ -575,16 +586,6 @@
     authSession = data.session || authSession;
     authUser = data.user;
     sessionUserId = data.user.id;
-
-    // Manually save session to localStorage to ensure persistence
-    if (data.session) {
-      const sessionData = {
-        user: data.user,
-        session: data.session
-      };
-      localStorage.setItem('sb-verso-libre-auth-token', JSON.stringify(sessionData));
-      console.log("[handleLogin] Session saved to localStorage");
-    }
 
     await ensureProfile(data.user);
     await refreshData();
@@ -777,10 +778,23 @@
   async function logout() {
     if (supabase) {
       await supabase.auth.signOut();
+
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("sb-") || key === "sb-verso-libre-auth-token")) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
     }
     authSession = null;
     authUser = null;
     sessionUserId = "";
+    users = [];
+    poems = [];
+    reactions = [];
+    comments = [];
     mobileMenuOpen = false;
     flash("Sesion cerrada.");
     navigate("/");
@@ -1070,17 +1084,6 @@
         authUser = nextUser;
         sessionUserId = nextUser?.id || "";
 
-        // Save session to localStorage on auth state changes
-        if (session) {
-          const sessionData = {
-            user: nextUser,
-            session: session
-          };
-          localStorage.setItem('sb-verso-libre-auth-token', JSON.stringify(sessionData));
-        } else if (event === "SIGNED_OUT") {
-          localStorage.removeItem('sb-verso-libre-auth-token');
-        }
-
         if (event === "PASSWORD_RECOVERY") {
           currentPath = "/reset-password";
           window.history.replaceState({}, "", "/reset-password");
@@ -1091,6 +1094,9 @@
         // while user saves settings.
         const shouldSyncProfile = ["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED"].includes(event);
         if (shouldSyncProfile) {
+          if (nextUser) {
+            await ensureProfile(nextUser);
+          }
           await refreshData();
         }
 
@@ -1117,28 +1123,7 @@
     };
   });
 
-  $: currentUser =
-    users.find((user) => user.id === sessionUserId) ||
-    (authUser
-      ? {
-          id: authUser.id,
-          email: authUser.email || "",
-          name: authUser.user_metadata?.name || authUser.email?.split("@")[0] || "Autor",
-          username:
-            String(authUser.user_metadata?.username || authUser.email?.split("@")[0] || "usuario")
-              .toLowerCase()
-              .replace(/[^a-z0-9._-]/g, "")
-              .slice(0, 24) || "usuario",
-          bio: authUser.user_metadata?.bio || "Sin biografia por ahora.",
-          role: authUser.email?.toLowerCase() === ADMIN_EMAIL ? "admin" : "user",
-          profileVisibility: "public",
-          emailVisibility: "private",
-          commentPermissions: "registered",
-          sensitiveFilter: true,
-          profileImage: "",
-          joinedAt: authUser.created_at || new Date().toISOString()
-        }
-      : null);
+  $: currentUser = users.find((user) => user.id === sessionUserId) || null;
   $: featuredPoem = poems.find((poem) => poem.status === "published") || null;
   $: moderationPoems = currentUser?.role === "admin" ? poems : [];
   $: visibleCategoryOptions = CATEGORY_OPTIONS.filter((option) => {
@@ -1828,7 +1813,7 @@
             </div>
 
             <div class="settings-grid">
-              <form class="settings-card stack-form" on:submit={saveProfileSettings}>
+              <form class="settings-card stack-form" on:submit={saveProfileSettings} novalidate>
                 <h3>Perfil</h3>
                 <label>
                   <span>Nombre visible</span>
