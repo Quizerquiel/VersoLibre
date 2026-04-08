@@ -362,7 +362,7 @@
     }
   }
 
-  async function upsertProfileViaRest(profilePayload, label) {
+  async function patchProfileViaRest(profileId, updates, label) {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       return { error: new Error("Falta configurar Supabase en Vercel.") };
     }
@@ -373,15 +373,15 @@
     }
 
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?on_conflict=id`, {
-        method: "POST",
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(profileId)}`, {
+        method: "PATCH",
         headers: {
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
-          Prefer: "resolution=merge-duplicates,return=representation"
+          Prefer: "return=representation"
         },
-        body: JSON.stringify(profilePayload)
+        body: JSON.stringify(updates)
       });
 
       const data = await response.json().catch(() => null);
@@ -792,22 +792,16 @@
         return;
       }
 
-      const profilePayload = {
-        id: currentUser.id,
-        email: currentUser.email || authUser?.email || "",
-        name: trimmedName,
-        username: trimmedUsername,
-        bio: trimmedBio || "Sin biografia por ahora.",
-        role: currentUser.role || "user",
-        email_visibility: currentUser.emailVisibility || "private",
-        profile_visibility: currentUser.profileVisibility || "public",
-        comment_permissions: currentUser.commentPermissions || "registered",
-        sensitive_filter: currentUser.sensitiveFilter ?? true,
-        profile_image: currentUser.profileImage || ""
-      };
-
       const { error } = await withTimeout(
-        upsertProfileViaRest(profilePayload, "Guardar perfil"),
+        patchProfileViaRest(
+          currentUser.id,
+          {
+            name: trimmedName,
+            username: trimmedUsername,
+            bio: trimmedBio || "Sin biografia por ahora."
+          },
+          "Guardar perfil"
+        ),
         10000,
         "Guardar perfil"
       );
@@ -874,22 +868,17 @@
     privacySettingsMessage = "";
 
     try {
-      const profilePayload = {
-        id: currentUser.id,
-        email: currentUser.email || authUser?.email || "",
-        name: currentUser.name || authUser?.user_metadata?.name || "Autor",
-        username: currentUser.username || "usuario",
-        bio: currentUser.bio || "Sin biografia por ahora.",
-        role: currentUser.role || "user",
-        email_visibility: settingsEmailVisibility,
-        profile_visibility: settingsProfileVisibility,
-        comment_permissions: settingsCommentPermissions,
-        sensitive_filter: settingsSensitiveFilter,
-        profile_image: currentUser.profileImage || ""
-      };
-
       const { error } = await withTimeout(
-        upsertProfileViaRest(profilePayload, "Guardar privacidad"),
+        patchProfileViaRest(
+          currentUser.id,
+          {
+            email_visibility: settingsEmailVisibility,
+            profile_visibility: settingsProfileVisibility,
+            comment_permissions: settingsCommentPermissions,
+            sensitive_filter: settingsSensitiveFilter
+          },
+          "Guardar privacidad"
+        ),
         10000,
         "Guardar privacidad"
       );
@@ -979,22 +968,12 @@
     reader.onload = async () => {
       try {
         const profileImage = String(reader.result || "");
-        const profilePayload = {
-          id: currentUser.id,
-          email: currentUser.email || authUser?.email || "",
-          name: currentUser.name || authUser?.user_metadata?.name || "Autor",
-          username: currentUser.username || "usuario",
-          bio: currentUser.bio || "Sin biografia por ahora.",
-          role: currentUser.role || "user",
-          email_visibility: currentUser.emailVisibility || "private",
-          profile_visibility: currentUser.profileVisibility || "public",
-          comment_permissions: currentUser.commentPermissions || "registered",
-          sensitive_filter: currentUser.sensitiveFilter ?? true,
-          profile_image: profileImage
-        };
-
         const { error } = await withTimeout(
-          upsertProfileViaRest(profilePayload, "Guardar foto de perfil"),
+          patchProfileViaRest(
+            currentUser.id,
+            { profile_image: profileImage },
+            "Guardar foto de perfil"
+          ),
           10000,
           "Guardar foto de perfil"
         );
