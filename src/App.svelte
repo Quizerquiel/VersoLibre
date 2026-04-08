@@ -1087,6 +1087,12 @@
           joinedAt: authUser.created_at || new Date().toISOString()
         }
       : null);
+  $: if (typeof window !== "undefined") {
+    const livePath = normalizePath(window.location.pathname);
+    if (currentPath !== livePath) {
+      currentPath = livePath;
+    }
+  }
   $: featuredPoem = poems.find((poem) => poem.status === "published") || null;
   $: moderationPoems = currentUser?.role === "admin" ? poems : [];
   $: visibleCategoryOptions = CATEGORY_OPTIONS.filter((option) => {
