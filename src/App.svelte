@@ -362,34 +362,37 @@
   }
 
   async function updateCurrentProfileViaRpc(payload, label) {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (!supabase) {
       return { error: new Error("Falta configurar Supabase en Vercel.") };
     }
 
-    const accessToken = authSession?.access_token;
-    if (!accessToken) {
-      return { error: new Error("Tu sesion expiró. Inicia sesion de nuevo.") };
-    }
-
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/update_current_profile`, {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData?.session?.user?.id) {
+        return { error: new Error("Tu sesion expiró. Inicia sesion de nuevo.") };
+      }
 
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          data?.message ||
-          data?.error_description ||
-          data?.error ||
-          `${label} falló (${response.status}).`;
-        return { error: new Error(message) };
+      const userId = sessionData.session.user.id;
+      const updates = {};
+
+      if (payload.p_name !== undefined) updates.name = payload.p_name;
+      if (payload.p_username !== undefined) updates.username = payload.p_username;
+      if (payload.p_bio !== undefined) updates.bio = payload.p_bio;
+      if (payload.p_email_visibility !== undefined) updates.email_visibility = payload.p_email_visibility;
+      if (payload.p_profile_visibility !== undefined) updates.profile_visibility = payload.p_profile_visibility;
+      if (payload.p_comment_permissions !== undefined) updates.comment_permissions = payload.p_comment_permissions;
+      if (payload.p_sensitive_filter !== undefined) updates.sensitive_filter = payload.p_sensitive_filter;
+      if (payload.p_profile_image !== undefined) updates.profile_image = payload.p_profile_image;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .update(updates)
+        .eq("id", userId)
+        .select("*")
+        .single();
+
+      if (error) {
+        return { error: new Error(error.message || `${label} falló.`) };
       }
 
       return { data, error: null };
@@ -399,40 +402,16 @@
   }
 
   async function fetchProfilesNoCache() {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (!supabase) {
       return { data: null, error: new Error("Falta configurar Supabase en Vercel.") };
     }
 
-    const accessToken = authSession?.access_token;
-    // If there is no session yet, fallback to client read.
-    if (!accessToken || !sessionUserId) {
-      const { data, error } = await supabase.from("profiles").select("*");
-      return { data, error };
-    }
+    const query = sessionUserId
+      ? supabase.from("profiles").select("*").eq("id", sessionUserId)
+      : supabase.from("profiles").select("*");
 
-    try {
-      const url = `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(sessionUserId)}&select=*`;
-      const response = await fetch(url, {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${accessToken}`,
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache"
-        }
-      });
-
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message = data?.message || data?.error_description || data?.error || "No se pudo cargar perfiles.";
-        return { data: null, error: new Error(message) };
-      }
-
-      return { data: Array.isArray(data) ? data : [], error: null };
-    } catch (error) {
-      return { data: null, error };
-    }
+    const { data, error } = await query;
+    return { data: data || [], error };
   }
 
   async function toggleReaction(poemId, value) {
