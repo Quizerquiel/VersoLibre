@@ -707,18 +707,27 @@
       return;
     }
 
+    if (authUser) {
+      await ensureProfile(authUser);
+    }
+
+    const profilePayload = {
+      id: currentUser.id,
+      email: currentUser.email || authUser?.email || "",
+      name: trimmedName,
+      username: trimmedUsername,
+      bio: trimmedBio || "Sin biografia por ahora.",
+      role: currentUser.role || "user",
+      email_visibility: settingsEmailVisibility,
+      profile_visibility: settingsProfileVisibility,
+      comment_permissions: settingsCommentPermissions,
+      sensitive_filter: settingsSensitiveFilter,
+      profile_image: currentUser.profileImage || ""
+    };
+
     const { error } = await supabase
       .from("profiles")
-      .update({
-        name: trimmedName,
-        username: trimmedUsername,
-        bio: trimmedBio || "Sin biografia por ahora.",
-        email_visibility: settingsEmailVisibility,
-        profile_visibility: settingsProfileVisibility,
-        comment_permissions: settingsCommentPermissions,
-        sensitive_filter: settingsSensitiveFilter
-      })
-      .eq("id", currentUser.id);
+      .upsert(profilePayload, { onConflict: "id" });
 
     if (error) {
       settingsMessage = error.message || "No se pudo guardar la configuracion.";
@@ -1658,6 +1667,7 @@
                   <span>Filtrar contenido sensible en tu feed</span>
                 </label>
                 <button class="primary-btn" type="submit">Guardar privacidad</button>
+                <p class="form-note" aria-live="polite">{settingsMessage}</p>
               </form>
 
               <form class="settings-card stack-form" on:submit={savePasswordSettings}>
