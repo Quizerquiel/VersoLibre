@@ -31,6 +31,7 @@
   let authUser = null;
   let authSession = null;
   let sessionUserId = "";
+  let authReady = false;
   let currentPath = "/";
   let visibleCount = FEED_BATCH;
   let searchQuery = "";
@@ -196,6 +197,7 @@
       return;
     }
 
+    authReady = false;
     await restorePersistedSession();
 
     const { data: { session } } = await supabase.auth.getSession();
@@ -206,6 +208,7 @@
       await ensureProfile(authUser);
     }
     await refreshData();
+    authReady = true;
   }
 
   function normalizePath(pathname) {
@@ -356,7 +359,6 @@
         refresh_token: parsed.refresh_token
       });
     } catch (error) {
-      console.log("[restorePersistedSession] error", error);
       localStorage.removeItem(SESSION_STORAGE_KEY);
     }
   }
@@ -633,9 +635,7 @@
     // Do not block login if sync fails; user should still enter.
     ensureProfile(data.user)
       .then(() => refreshData())
-      .catch((syncError) => {
-        console.log("[handleLogin] post-login sync error", syncError);
-      });
+      .catch(() => {});
   }
 
   async function handleForgotPassword() {
@@ -835,12 +835,6 @@
 
   async function saveProfileSettings(event) {
     event?.preventDefault?.();
-    console.log("[saveProfileSettings] submit fired", {
-      hasCurrentUser: Boolean(currentUser),
-      hasSupabase: Boolean(supabase),
-      authUserId: authUser?.id || null,
-      sessionUserId: sessionUserId || null
-    });
     if (!currentUser || !supabase) return;
     profileSettingsMessage = "";
 
@@ -848,21 +842,13 @@
       const trimmedName = (settingsName || currentUser.name || "").trim();
       const trimmedUsername = (settingsUsername || currentUser.username || "").trim().toLowerCase();
       const trimmedBio = settingsBio.trim();
-      console.log("[saveProfileSettings] normalized input", {
-        trimmedName,
-        trimmedUsername,
-        trimmedBio,
-        bioLength: trimmedBio.length
-      });
 
       if (trimmedName.length < 3) {
-        console.log("[saveProfileSettings] blocked by name validation");
         profileSettingsMessage = "El nombre visible debe tener al menos 3 caracteres.";
         return;
       }
 
       if (trimmedUsername.length < 3 || /\s/.test(trimmedUsername)) {
-        console.log("[saveProfileSettings] blocked by username validation");
         profileSettingsMessage = "El usuario debe tener al menos 3 caracteres y sin espacios.";
         return;
       }
@@ -872,16 +858,9 @@
       );
 
       if (usernameInUse) {
-        console.log("[saveProfileSettings] blocked by username collision", { trimmedUsername });
         profileSettingsMessage = "Ese nombre de usuario ya esta en uso.";
         return;
       }
-
-      console.log("[saveProfileSettings] calling rpc update_current_profile", {
-        name: trimmedName,
-        username: trimmedUsername,
-        bioLength: trimmedBio.length
-      });
 
       const { error } = await withLockRetry(
         () => updateCurrentProfileViaRpc(
@@ -896,13 +875,7 @@
         240
       );
 
-      console.log("[saveProfileSettings] rpc finished", {
-        hasError: Boolean(error),
-        errorMessage: error?.message || null
-      });
-
       if (error) {
-        console.log("[saveProfileSettings] rpc error", error);
         profileSettingsMessage = error.message || "No se pudo guardar la configuracion.";
         return;
       }
@@ -935,15 +908,11 @@
       );
 
       profileSettingsMessage = "Perfil guardado.";
-      console.log("[saveProfileSettings] success");
       flash("Tu cuenta se actualizo correctamente.");
 
       // Refresh in background; don't fail UX if sync takes too long.
-      refreshData()
-        .then(() => console.log("[saveProfileSettings] refreshData finished"))
-        .catch((refreshError) => console.log("[saveProfileSettings] refreshData error", refreshError));
+      refreshData().catch(() => {});
     } catch (error) {
-      console.log("[saveProfileSettings] exception", error);
       profileSettingsMessage = error?.message || "No se pudo guardar la configuracion.";
     }
   }
@@ -1139,7 +1108,7 @@
             }
             await refreshData();
           } catch (syncError) {
-            console.log("[onAuthStateChange] sync error", syncError);
+            void syncError;
           }
         }
 
@@ -1148,6 +1117,10 @@
           poems = [];
           reactions = [];
           comments = [];
+        }
+
+        if (["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED", "SIGNED_OUT"].includes(event)) {
+          authReady = true;
         }
       });
       authListener = authSubscription?.data?.subscription || null;
@@ -1665,7 +1638,12 @@
       </section>
     {:else if currentPath === "/perfil"}
       <section class="profile-shell">
-        {#if currentUser}
+        {#if !authReady}
+          <div class="gate-panel">
+            <h3>Cargando tu sesión...</h3>
+            <p>Estamos restaurando tu acceso, un momento.</p>
+          </div>
+        {:else if currentUser}
           <aside class="profile-card">
             <input
               bind:this={profilePhotoInput}
@@ -1835,7 +1813,12 @@
       </section>
     {:else if currentPath === "/configuracion"}
       <section class="page-card">
-        {#if currentUser}
+        {#if !authReady}
+          <div class="gate-panel">
+            <h3>Cargando tu sesión...</h3>
+            <p>Estamos restaurando tu acceso, un momento.</p>
+          </div>
+        {:else if currentUser}
           <section class="settings-panel standalone-settings">
             <div class="section-title">
               <div>
