@@ -204,12 +204,13 @@
       authUser = session?.user || null;
       sessionUserId = authUser?.id || "";
       if (authUser) {
-        await ensureProfile(authUser);
+        void ensureProfile(authUser);
       }
-      await refreshData();
     } finally {
       authReady = true;
     }
+
+    refreshData().catch(() => {});
   }
 
   function normalizePath(pathname) {
@@ -1061,14 +1062,10 @@
         // while user saves settings.
         const shouldSyncProfile = ["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED"].includes(event);
         if (shouldSyncProfile) {
-          try {
-            if (nextUser) {
-              await ensureProfile(nextUser);
-            }
-            await refreshData();
-          } catch (syncError) {
-            void syncError;
+          if (nextUser) {
+            void ensureProfile(nextUser);
           }
+          refreshData().catch(() => {});
         }
 
         if (event === "SIGNED_OUT") {
