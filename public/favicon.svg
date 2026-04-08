@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#b2462f" />
+      <stop offset="100%" stop-color="#7a291c" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)" />
+  <text
+    x="32"
+    y="39"
+    text-anchor="middle"
+    fill="#fff8f1"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="26"
+    font-weight="700"
+    letter-spacing="1"
+  >
+    VL
+  </text>
+</svg>
