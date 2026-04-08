@@ -136,6 +136,47 @@ as $$
   select exists(select 1 from public.profiles p where p.id = uid and p.role = 'admin');
 $$;
 
+create or replace function public.update_current_profile(
+  p_name text default null,
+  p_username text default null,
+  p_bio text default null,
+  p_email_visibility text default null,
+  p_profile_visibility text default null,
+  p_comment_permissions text default null,
+  p_sensitive_filter boolean default null,
+  p_profile_image text default null
+)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_profile public.profiles;
+begin
+  update public.profiles
+  set
+    name = coalesce(p_name, name),
+    username = coalesce(p_username, username),
+    bio = coalesce(p_bio, bio),
+    email_visibility = coalesce(p_email_visibility, email_visibility),
+    profile_visibility = coalesce(p_profile_visibility, profile_visibility),
+    comment_permissions = coalesce(p_comment_permissions, comment_permissions),
+    sensitive_filter = coalesce(p_sensitive_filter, sensitive_filter),
+    profile_image = coalesce(p_profile_image, profile_image)
+  where id = auth.uid()
+  returning * into updated_profile;
+
+  if not found then
+    raise exception 'profile not found';
+  end if;
+
+  return updated_profile;
+end;
+$$;
+
+grant execute on function public.update_current_profile(text, text, text, text, text, text, boolean, text) to authenticated;
+
 alter table public.profiles enable row level security;
 alter table public.poems enable row level security;
 alter table public.reactions enable row level security;

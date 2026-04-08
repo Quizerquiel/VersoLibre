@@ -362,123 +362,14 @@
     }
   }
 
-  async function patchProfileViaRest(profileId, updates, label) {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      return { error: new Error("Falta configurar Supabase en Vercel.") };
-    }
-
-    const accessToken = authSession?.access_token;
-    if (!accessToken) {
-      return { error: new Error("Tu sesion expiró. Inicia sesion de nuevo.") };
-    }
-
+  async function updateCurrentProfileViaRpc(payload, label) {
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(profileId)}`, {
-        method: "PATCH",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          Prefer: "return=representation"
-        },
-        body: JSON.stringify(updates)
-      });
-
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          data?.message ||
-          data?.error_description ||
-          data?.error ||
-          `${label} falló (${response.status}).`;
-        return { error: new Error(message) };
-      }
-
-      if (Array.isArray(data) && data.length === 0) {
-        return { error: new Error(`${label} no aplicó cambios en Supabase.`) };
+      const { data, error } = await supabase.rpc("update_current_profile", payload);
+      if (error) {
+        return { error: new Error(error.message || `${label} falló.`) };
       }
 
       return { data, error: null };
-    } catch (error) {
-      return { error };
-    }
-  }
-
-  async function upsertProfileFullViaRest(profilePayload, label) {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      return { error: new Error("Falta configurar Supabase en Vercel.") };
-    }
-
-    const accessToken = authSession?.access_token;
-    if (!accessToken) {
-      return { error: new Error("Tu sesion expiró. Inicia sesion de nuevo.") };
-    }
-
-    try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?on_conflict=id`, {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          Prefer: "resolution=merge-duplicates,return=representation"
-        },
-        body: JSON.stringify(profilePayload)
-      });
-
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          data?.message ||
-          data?.error_description ||
-          data?.error ||
-          `${label} falló (${response.status}).`;
-        return { error: new Error(message) };
-      }
-
-      if (Array.isArray(data) && data.length === 0) {
-        return { error: new Error(`${label} no devolvió cambios.`) };
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return { error };
-    }
-  }
-
-  async function fetchProfileByIdViaRest(profileId, label) {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      return { error: new Error("Falta configurar Supabase en Vercel.") };
-    }
-
-    const accessToken = authSession?.access_token;
-    if (!accessToken) {
-      return { error: new Error("Tu sesion expiró. Inicia sesion de nuevo.") };
-    }
-
-    try {
-      const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(profileId)}&select=id,name,username,bio,profile_image,email_visibility,profile_visibility,comment_permissions,sensitive_filter`,
-        {
-          method: "GET",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${accessToken}`
-          }
-        }
-      );
-
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          data?.message ||
-          data?.error_description ||
-          data?.error ||
-          `${label} falló (${response.status}).`;
-        return { error: new Error(message) };
-      }
-
-      return { data: Array.isArray(data) ? data[0] || null : null, error: null };
     } catch (error) {
       return { error };
     }
@@ -877,8 +768,7 @@
       }
 
       const { error } = await withTimeout(
-        patchProfileViaRest(
-          currentUser.id,
+        updateCurrentProfileViaRpc(
           {
             name: trimmedName,
             username: trimmedUsername,
@@ -891,70 +781,8 @@
       );
 
       if (error) {
-        const fullPayload = {
-          id: currentUser.id,
-          email: currentUser.email || authUser?.email || "",
-          name: trimmedName,
-          username: trimmedUsername,
-          bio: trimmedBio || "Sin biografia por ahora.",
-          role: currentUser.role || "user",
-          profile_visibility: currentUser.profileVisibility || "public",
-          email_visibility: currentUser.emailVisibility || "private",
-          comment_permissions: currentUser.commentPermissions || "registered",
-          sensitive_filter: currentUser.sensitiveFilter ?? true,
-          profile_image: currentUser.profileImage || ""
-        };
-
-        const fallback = await withTimeout(
-          upsertProfileFullViaRest(fullPayload, "Guardar perfil"),
-          10000,
-          "Guardar perfil"
-        );
-
-        if (fallback.error) {
-          profileSettingsMessage = fallback.error.message || error.message || "No se pudo guardar la configuracion.";
-          return;
-        }
-      }
-
-      const verify = await withTimeout(
-        fetchProfileByIdViaRest(currentUser.id, "Verificar perfil"),
-        10000,
-        "Verificar perfil"
-      );
-
-      const persistedMatches =
-        !verify.error &&
-        verify.data &&
-        String(verify.data.name || "") === trimmedName &&
-        String(verify.data.username || "") === trimmedUsername &&
-        String(verify.data.bio || "") === (trimmedBio || "Sin biografia por ahora.");
-
-      if (!persistedMatches) {
-        const retryPayload = {
-          id: currentUser.id,
-          email: currentUser.email || authUser?.email || "",
-          name: trimmedName,
-          username: trimmedUsername,
-          bio: trimmedBio || "Sin biografia por ahora.",
-          role: currentUser.role || "user",
-          profile_visibility: currentUser.profileVisibility || "public",
-          email_visibility: currentUser.emailVisibility || "private",
-          comment_permissions: currentUser.commentPermissions || "registered",
-          sensitive_filter: currentUser.sensitiveFilter ?? true,
-          profile_image: currentUser.profileImage || ""
-        };
-
-        const retry = await withTimeout(
-          upsertProfileFullViaRest(retryPayload, "Reintentar guardar perfil"),
-          10000,
-          "Reintentar guardar perfil"
-        );
-
-        if (retry.error) {
-          profileSettingsMessage = retry.error.message || "No se pudo confirmar el guardado del perfil.";
-          return;
-        }
+        profileSettingsMessage = error.message || "No se pudo guardar la configuracion.";
+        return;
       }
 
       // Persist auth metadata too so reloads don't fallback to stale values
@@ -1015,8 +843,7 @@
 
     try {
       const { error } = await withTimeout(
-        patchProfileViaRest(
-          currentUser.id,
+        updateCurrentProfileViaRpc(
           {
             email_visibility: settingsEmailVisibility,
             profile_visibility: settingsProfileVisibility,
@@ -1030,30 +857,8 @@
       );
 
       if (error) {
-        const fullPayload = {
-          id: currentUser.id,
-          email: currentUser.email || authUser?.email || "",
-          name: currentUser.name || authUser?.user_metadata?.name || "Autor",
-          username: currentUser.username || "usuario",
-          bio: currentUser.bio || "Sin biografia por ahora.",
-          role: currentUser.role || "user",
-          profile_visibility: settingsProfileVisibility,
-          email_visibility: settingsEmailVisibility,
-          comment_permissions: settingsCommentPermissions,
-          sensitive_filter: settingsSensitiveFilter,
-          profile_image: currentUser.profileImage || ""
-        };
-
-        const fallback = await withTimeout(
-          upsertProfileFullViaRest(fullPayload, "Guardar privacidad"),
-          10000,
-          "Guardar privacidad"
-        );
-
-        if (fallback.error) {
-          privacySettingsMessage = fallback.error.message || error.message || "No se pudo guardar la privacidad.";
-          return;
-        }
+        privacySettingsMessage = error.message || "No se pudo guardar la privacidad.";
+        return;
       }
 
       users = users.map((user) =>
@@ -1137,8 +942,7 @@
       try {
         const profileImage = String(reader.result || "");
         const { error } = await withTimeout(
-          patchProfileViaRest(
-            currentUser.id,
+          updateCurrentProfileViaRpc(
             { profile_image: profileImage },
             "Guardar foto de perfil"
           ),
@@ -1147,30 +951,8 @@
         );
 
         if (error) {
-          const fullPayload = {
-            id: currentUser.id,
-            email: currentUser.email || authUser?.email || "",
-            name: currentUser.name || authUser?.user_metadata?.name || "Autor",
-            username: currentUser.username || "usuario",
-            bio: currentUser.bio || "Sin biografia por ahora.",
-            role: currentUser.role || "user",
-            profile_visibility: currentUser.profileVisibility || "public",
-            email_visibility: currentUser.emailVisibility || "private",
-            comment_permissions: currentUser.commentPermissions || "registered",
-            sensitive_filter: currentUser.sensitiveFilter ?? true,
-            profile_image: profileImage
-          };
-
-          const fallback = await withTimeout(
-            upsertProfileFullViaRest(fullPayload, "Guardar foto de perfil"),
-            10000,
-            "Guardar foto de perfil"
-          );
-
-          if (fallback.error) {
-            profileSettingsMessage = fallback.error.message || error.message || "No pudimos actualizar tu foto de perfil.";
-            return;
-          }
+          profileSettingsMessage = error.message || "No pudimos actualizar tu foto de perfil.";
+          return;
         }
 
         users = users.map((user) =>
