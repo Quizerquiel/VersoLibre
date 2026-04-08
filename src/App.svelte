@@ -146,7 +146,7 @@
   async function refreshData() {
     if (!isSupabaseConfigured || !supabase) return;
 
-    const profilesRes = await supabase.from("profiles").select("*");
+    const profilesRes = await fetchProfilesNoCache();
     const poemsRes = await supabase.from("poems").select("*").order("created_at", { ascending: false });
     const reactionsRes = await supabase.from("reactions").select("*");
     const commentsRes = await supabase.from("comments").select("*").order("created_at", { ascending: false });
@@ -395,6 +395,41 @@
       return { data, error: null };
     } catch (error) {
       return { error };
+    }
+  }
+
+  async function fetchProfilesNoCache() {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return { data: null, error: new Error("Falta configurar Supabase en Vercel.") };
+    }
+
+    const accessToken = authSession?.access_token;
+    // If there is no session yet, fallback to client read.
+    if (!accessToken || !sessionUserId) {
+      const { data, error } = await supabase.from("profiles").select("*");
+      return { data, error };
+    }
+
+    try {
+      const url = `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(sessionUserId)}&select=*&_ts=${Date.now()}`;
+      const response = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${accessToken}`
+        }
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = data?.message || data?.error_description || data?.error || "No se pudo cargar perfiles.";
+        return { data: null, error: new Error(message) };
+      }
+
+      return { data: Array.isArray(data) ? data : [], error: null };
+    } catch (error) {
+      return { data: null, error };
     }
   }
 
