@@ -683,9 +683,10 @@
   async function saveProfileSettings(event) {
     event.preventDefault();
     if (!currentUser || !supabase) return;
+    settingsMessage = "";
 
-    const trimmedName = settingsName.trim();
-    const trimmedUsername = settingsUsername.trim().toLowerCase();
+    const trimmedName = (settingsName || currentUser.name || "").trim();
+    const trimmedUsername = (settingsUsername || currentUser.username || "").trim().toLowerCase();
     const trimmedBio = settingsBio.trim();
 
     if (trimmedName.length < 3) {
@@ -718,10 +719,10 @@
       username: trimmedUsername,
       bio: trimmedBio || "Sin biografia por ahora.",
       role: currentUser.role || "user",
-      email_visibility: settingsEmailVisibility,
-      profile_visibility: settingsProfileVisibility,
-      comment_permissions: settingsCommentPermissions,
-      sensitive_filter: settingsSensitiveFilter,
+      email_visibility: currentUser.emailVisibility || "private",
+      profile_visibility: currentUser.profileVisibility || "public",
+      comment_permissions: currentUser.commentPermissions || "registered",
+      sensitive_filter: currentUser.sensitiveFilter ?? true,
       profile_image: currentUser.profileImage || ""
     };
 
@@ -762,6 +763,43 @@
     settingsMessage = "Configuracion guardada.";
     flash("Tu cuenta se actualizo correctamente.");
   }
+
+    async function savePrivacySettings(event) {
+      event.preventDefault();
+      if (!currentUser || !supabase) return;
+      settingsMessage = "";
+
+      if (authUser) {
+        await ensureProfile(authUser);
+      }
+
+      const profilePayload = {
+        id: currentUser.id,
+        email: currentUser.email || authUser?.email || "",
+        name: currentUser.name || authUser?.user_metadata?.name || "Autor",
+        username: currentUser.username || "usuario",
+        bio: currentUser.bio || "Sin biografia por ahora.",
+        role: currentUser.role || "user",
+        email_visibility: settingsEmailVisibility,
+        profile_visibility: settingsProfileVisibility,
+        comment_permissions: settingsCommentPermissions,
+        sensitive_filter: settingsSensitiveFilter,
+        profile_image: currentUser.profileImage || ""
+      };
+
+      const { error } = await supabase
+        .from("profiles")
+        .upsert(profilePayload, { onConflict: "id" });
+
+      if (error) {
+        settingsMessage = error.message || "No se pudo guardar la privacidad.";
+        return;
+      }
+
+      await refreshData();
+      settingsMessage = "Privacidad guardada.";
+      flash("Tu privacidad se actualizo correctamente.");
+    }
 
   async function savePasswordSettings(event) {
     event.preventDefault();
@@ -1636,7 +1674,7 @@
                 <p class="form-note" aria-live="polite">{settingsMessage}</p>
               </form>
 
-              <form class="settings-card stack-form" on:submit={saveProfileSettings}>
+              <form class="settings-card stack-form" on:submit={savePrivacySettings}>
                 <h3>Privacidad</h3>
                 <label>
                   <span>Visibilidad del perfil</span>
