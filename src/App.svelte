@@ -11,6 +11,7 @@
   const FEED_BATCH = 6;
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
   const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const SESSION_STORAGE_KEY = "versolibre-session-v1";
   const routes = new Set(["/", "/poemas", "/publicar", "/login", "/registro", "/reset-password", "/perfil", "/autor", "/configuracion", "/admin"]);
   const CATEGORY_OPTIONS = [
     { id: "amor", label: "Amor", aliases: ["romance", "romantico", "deseo", "pareja", "corazon"] },
@@ -195,6 +196,8 @@
       return;
     }
 
+    await restorePersistedSession();
+
     const { data: { session } } = await supabase.auth.getSession();
     authSession = session || null;
     authUser = session?.user || null;
@@ -321,6 +324,41 @@
 
   function validEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  function persistSession(session) {
+    if (!session) {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      return;
+    }
+
+    localStorage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at,
+        token_type: session.token_type,
+        user: session.user
+      })
+    );
+  }
+
+  async function restorePersistedSession() {
+    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (!parsed?.access_token || !parsed?.refresh_token) return;
+      await supabase.auth.setSession({
+        access_token: parsed.access_token,
+        refresh_token: parsed.refresh_token
+      });
+    } catch (error) {
+      console.log("[restorePersistedSession] error", error);
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
   }
 
   function isTransientLockError(error) {
@@ -585,6 +623,7 @@
     authSession = data.session || authSession;
     authUser = data.user;
     sessionUserId = data.user.id;
+    persistSession(data.session || authSession);
 
     loginEmail = "";
     loginPassword = "";
@@ -780,16 +819,8 @@
   async function logout() {
     if (supabase) {
       await supabase.auth.signOut();
-
-      const keysToRemove = [];
-      for (let i = 0; i < localStorage.length; i += 1) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith("sb-") || key === "sb-verso-libre-auth-token")) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach((key) => localStorage.removeItem(key));
     }
+    persistSession(null);
     authSession = null;
     authUser = null;
     sessionUserId = "";
@@ -1066,9 +1097,6 @@
   }
 
   onMount(() => {
-    // Cleanup legacy key from previous auth workaround.
-    localStorage.removeItem("sb-verso-libre-auth-token");
-
     bootstrapState();
     currentPath = normalizePath(window.location.pathname);
     if (currentPath === "/autor") {
@@ -1088,6 +1116,7 @@
         authSession = session || null;
         authUser = nextUser;
         sessionUserId = nextUser?.id || "";
+        persistSession(session);
 
         if (event === "PASSWORD_RECOVERY") {
           currentPath = "/reset-password";
