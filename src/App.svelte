@@ -796,10 +796,6 @@
   }
 
   async function logout() {
-    if (!window.confirm("¿Seguro que quieres cerrar sesión?")) {
-      return;
-    }
-
     if (supabase) {
       await supabase.auth.signOut();
     }
