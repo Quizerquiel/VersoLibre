@@ -834,6 +834,20 @@
         return;
       }
 
+      // Persist auth metadata too so reloads don't fallback to stale values
+      // when profile sync is delayed.
+      if (supabase) {
+        supabase.auth
+          .updateUser({
+            data: {
+              name: trimmedName,
+              username: trimmedUsername,
+              bio: trimmedBio || "Sin biografia por ahora."
+            }
+          })
+          .catch(() => {});
+      }
+
       if (authUser) {
         authUser = {
           ...authUser,
@@ -861,10 +875,12 @@
           : user
       );
 
-      await withTimeout(refreshData(), 10000, "Sincronizar perfil");
       profileSettingsMessage = "Perfil guardado.";
       console.log("[saveProfileSettings] success");
       flash("Tu cuenta se actualizo correctamente.");
+
+      // Refresh in background; don't fail UX if sync takes too long.
+      refreshData().catch(() => {});
     } catch (error) {
       console.log("[saveProfileSettings] exception", error);
       profileSettingsMessage = error?.message || "No se pudo guardar la configuracion.";
@@ -902,9 +918,22 @@
         return;
       }
 
-      await withTimeout(refreshData(), 10000, "Sincronizar privacidad");
+      users = users.map((user) =>
+        user.id === currentUser.id
+          ? {
+              ...user,
+              emailVisibility: settingsEmailVisibility,
+              profileVisibility: settingsProfileVisibility,
+              commentPermissions: settingsCommentPermissions,
+              sensitiveFilter: settingsSensitiveFilter
+            }
+          : user
+      );
+
       privacySettingsMessage = "Privacidad guardada.";
       flash("Tu privacidad se actualizo correctamente.");
+
+      refreshData().catch(() => {});
     } catch (error) {
       privacySettingsMessage = error?.message || "No se pudo guardar la privacidad.";
     }
