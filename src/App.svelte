@@ -11,7 +11,6 @@
   const FEED_BATCH = 6;
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
   const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  const SESSION_STORAGE_KEY = "versolibre-session-v1";
   const routes = new Set(["/", "/poemas", "/publicar", "/login", "/registro", "/reset-password", "/perfil", "/autor", "/configuracion", "/admin"]);
   const CATEGORY_OPTIONS = [
     { id: "amor", label: "Amor", aliases: ["romance", "romantico", "deseo", "pareja", "corazon"] },
@@ -200,11 +199,6 @@
 
     authReady = false;
     try {
-      await Promise.race([
-        restorePersistedSession(),
-        new Promise((resolve) => setTimeout(resolve, 1500))
-      ]);
-
       const { data: { session } } = await supabase.auth.getSession();
       authSession = session || null;
       authUser = session?.user || null;
@@ -213,8 +207,6 @@
         await ensureProfile(authUser);
       }
       await refreshData();
-    } catch (error) {
-      void error;
     } finally {
       authReady = true;
     }
@@ -261,40 +253,6 @@
   function flash(message) {
     announcement = message;
     clearTimeout(flash.timeoutId);
-    flash.timeoutId = setTimeout(() => {
-      announcement = "";
-    }, 2600);
-  }
-
-  function formatDate(dateString) {
-    return new Intl.DateTimeFormat("es-SV", { day: "numeric", month: "short", year: "numeric" }).format(new Date(dateString));
-  }
-
-  function formatRelative(dateString) {
-    const minutes = Math.max(1, Math.floor((Date.now() - new Date(dateString).getTime()) / 60000));
-    if (minutes < 60) return `${minutes} min`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} h`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days} d`;
-    return formatDate(dateString);
-  }
-
-  function formatJoinDate(dateString) {
-    return new Intl.DateTimeFormat("es-SV", { month: "long", year: "numeric" }).format(new Date(dateString));
-  }
-
-  function truncate(text, size = 180) {
-    return text.length <= size ? text : `${text.slice(0, size).trim()}...`;
-  }
-
-  function toPreviewText(text) {
-    return String(text || "").replace(/\s+/g, " ").trim();
-  }
-
-  function canViewProfile(user) {
-    if (!user) return false;
-    if (currentUser?.role === "admin" || currentUser?.id === user.id) return true;
 
     const visibility = user.profileVisibility || "public";
     if (visibility === "public") return true;
@@ -634,7 +592,6 @@
     authSession = data.session || authSession;
     authUser = data.user;
     sessionUserId = data.user.id;
-    persistSession(data.session || authSession);
 
     loginEmail = "";
     loginPassword = "";
@@ -829,7 +786,6 @@
     if (supabase) {
       await supabase.auth.signOut();
     }
-    persistSession(null);
     authSession = null;
     authUser = null;
     sessionUserId = "";
@@ -1094,12 +1050,6 @@
         authSession = session || null;
         authUser = nextUser;
         sessionUserId = nextUser?.id || "";
-
-        if (event === "SIGNED_OUT") {
-          persistSession(null);
-        } else if (session) {
-          persistSession(session);
-        }
 
         if (event === "PASSWORD_RECOVERY") {
           currentPath = "/reset-password";
