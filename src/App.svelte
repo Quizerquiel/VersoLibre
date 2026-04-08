@@ -30,7 +30,7 @@
   let authUser = null;
   let authSession = null;
   let sessionUserId = "";
-  let currentPath = "/";
+  let currentPath = typeof window !== "undefined" ? window.location.pathname.replace(/\/+$/, "") || "/" : "/";
   let visibleCount = FEED_BATCH;
   let searchQuery = "";
   let selectedCategory = "all";
@@ -211,6 +211,11 @@
   function normalizePath(pathname) {
     const clean = pathname.replace(/\/+$/, "") || "/";
     return routes.has(clean) ? clean : "/404";
+  }
+
+  function syncCurrentPathFromLocation() {
+    if (typeof window === "undefined") return;
+    currentPath = normalizePath(window.location.pathname);
   }
 
   function navigate(path) {
@@ -998,8 +1003,8 @@
   }
 
   onMount(() => {
+    syncCurrentPathFromLocation();
     bootstrapState();
-    currentPath = normalizePath(window.location.pathname);
     if (currentPath === "/autor") {
       viewedProfileId = new URLSearchParams(window.location.search).get("u") || "";
     }
@@ -1022,6 +1027,8 @@
           currentPath = "/reset-password";
           window.history.replaceState({}, "", "/reset-password");
           resetPasswordMessage = "Escribe tu nueva contrasena para recuperar el acceso.";
+        } else {
+          syncCurrentPathFromLocation();
         }
 
         // Avoid writing profiles on every token refresh to prevent lock contention
