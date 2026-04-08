@@ -966,13 +966,27 @@
         const nextUser = session?.user || null;
         authUser = nextUser;
         sessionUserId = nextUser?.id || "";
+
         if (event === "PASSWORD_RECOVERY") {
           currentPath = "/reset-password";
           window.history.replaceState({}, "", "/reset-password");
           resetPasswordMessage = "Escribe tu nueva contrasena para recuperar el acceso.";
         }
-        await ensureProfile(nextUser);
-        await refreshData();
+
+        // Avoid writing profiles on every token refresh to prevent lock contention
+        // while user saves settings.
+        const shouldSyncProfile = ["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED"].includes(event);
+        if (shouldSyncProfile) {
+          await ensureProfile(nextUser);
+          await refreshData();
+        }
+
+        if (event === "SIGNED_OUT") {
+          users = [];
+          poems = [];
+          reactions = [];
+          comments = [];
+        }
       });
       authListener = authSubscription?.data?.subscription || null;
 
