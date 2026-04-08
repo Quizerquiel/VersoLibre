@@ -709,6 +709,10 @@
 
   async function saveProfileSettings(event) {
     event.preventDefault();
+    console.log("[saveProfileSettings] submit fired", {
+      hasCurrentUser: Boolean(currentUser),
+      hasSupabase: Boolean(supabase)
+    });
     if (!currentUser || !supabase) return;
     profileSettingsMessage = "";
 
@@ -716,13 +720,20 @@
       const trimmedName = (settingsName || currentUser.name || "").trim();
       const trimmedUsername = (settingsUsername || currentUser.username || "").trim().toLowerCase();
       const trimmedBio = settingsBio.trim();
+      console.log("[saveProfileSettings] normalized input", {
+        trimmedName,
+        trimmedUsername,
+        bioLength: trimmedBio.length
+      });
 
       if (trimmedName.length < 3) {
+        console.log("[saveProfileSettings] blocked by name validation");
         profileSettingsMessage = "El nombre visible debe tener al menos 3 caracteres.";
         return;
       }
 
       if (trimmedUsername.length < 3 || /\s/.test(trimmedUsername)) {
+        console.log("[saveProfileSettings] blocked by username validation");
         profileSettingsMessage = "El usuario debe tener al menos 3 caracteres y sin espacios.";
         return;
       }
@@ -732,6 +743,7 @@
       );
 
       if (usernameInUse) {
+        console.log("[saveProfileSettings] blocked by username collision", { trimmedUsername });
         profileSettingsMessage = "Ese nombre de usuario ya esta en uso.";
         return;
       }
@@ -755,6 +767,11 @@
           .from("profiles")
           .upsert(profilePayload, { onConflict: "id" })
       );
+
+      console.log("[saveProfileSettings] upsert finished", {
+        hasError: Boolean(error),
+        errorMessage: error?.message || null
+      });
 
       if (error) {
         profileSettingsMessage = error.message || "No se pudo guardar la configuracion.";
@@ -790,8 +807,10 @@
 
       await refreshData();
       profileSettingsMessage = "Perfil guardado.";
+      console.log("[saveProfileSettings] success");
       flash("Tu cuenta se actualizo correctamente.");
     } catch (error) {
+      console.log("[saveProfileSettings] exception", error);
       profileSettingsMessage = error?.message || "No se pudo guardar la configuracion.";
     }
   }
