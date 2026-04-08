@@ -411,13 +411,15 @@
     }
 
     try {
-      const url = `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(sessionUserId)}&select=*&_ts=${Date.now()}`;
+      const url = `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(sessionUserId)}&select=*`;
       const response = await fetch(url, {
         method: "GET",
         cache: "no-store",
         headers: {
           apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${accessToken}`
+          Authorization: `Bearer ${accessToken}`,
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache"
         }
       });
 
