@@ -199,7 +199,6 @@
     authSession = session || null;
     authUser = session?.user || null;
     sessionUserId = authUser?.id || "";
-    await ensureProfile(authUser);
     await refreshData();
   }
 
@@ -812,21 +811,6 @@
         return;
       }
 
-      // Persist auth metadata too so reloads don't fallback to stale values
-      // when profile sync is delayed.
-      if (supabase) {
-        console.log("[saveProfileSettings] updating auth metadata in background");
-        supabase.auth
-          .updateUser({
-            data: {
-              name: trimmedName,
-              username: trimmedUsername,
-              bio: trimmedBio || "Sin biografia por ahora."
-            }
-          })
-            .catch((authError) => console.log("[saveProfileSettings] auth metadata update error", authError));
-      }
-
       if (authUser) {
         authUser = {
           ...authUser,
@@ -1047,7 +1031,6 @@
         // while user saves settings.
         const shouldSyncProfile = ["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED"].includes(event);
         if (shouldSyncProfile) {
-          await ensureProfile(nextUser);
           await refreshData();
         }
 
