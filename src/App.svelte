@@ -9,6 +9,8 @@
 
   const ADMIN_EMAIL = "padillajosueezequiel@gmail.com";
   const FEED_BATCH = 6;
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
   const routes = new Set(["/", "/poemas", "/publicar", "/login", "/registro", "/reset-password", "/perfil", "/autor", "/configuracion", "/admin"]);
   const CATEGORY_OPTIONS = [
     { id: "amor", label: "Amor", aliases: ["romance", "romantico", "deseo", "pareja", "corazon"] },
@@ -26,6 +28,7 @@
   let reactions = [];
   let comments = [];
   let authUser = null;
+  let authSession = null;
   let sessionUserId = "";
   let currentPath = "/";
   let visibleCount = FEED_BATCH;
@@ -193,6 +196,7 @@
     }
 
     const { data: { session } } = await supabase.auth.getSession();
+    authSession = session || null;
     authUser = session?.user || null;
     sessionUserId = authUser?.id || "";
     await ensureProfile(authUser);
@@ -355,6 +359,44 @@
       return await Promise.race([promise, timeoutPromise]);
     } finally {
       clearTimeout(timeoutId);
+    }
+  }
+
+  async function upsertProfileViaRest(profilePayload, label) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return { error: new Error("Falta configurar Supabase en Vercel.") };
+    }
+
+    const accessToken = authSession?.access_token;
+    if (!accessToken) {
+      return { error: new Error("Tu sesion expiró. Inicia sesion de nuevo.") };
+    }
+
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?on_conflict=id`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=representation"
+        },
+        body: JSON.stringify(profilePayload)
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          data?.message ||
+          data?.error_description ||
+          data?.error ||
+          `${label} falló (${response.status}).`;
+        return { error: new Error(message) };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return { error };
     }
   }
 
@@ -713,6 +755,7 @@
     if (supabase) {
       await supabase.auth.signOut();
     }
+    authSession = null;
     authUser = null;
     sessionUserId = "";
     mobileMenuOpen = false;
@@ -776,11 +819,7 @@
       };
 
       const { error } = await withTimeout(
-        withLockRetry(() =>
-          supabase
-            .from("profiles")
-            .upsert(profilePayload, { onConflict: "id" })
-        ),
+        upsertProfileViaRest(profilePayload, "Guardar perfil"),
         10000,
         "Guardar perfil"
       );
@@ -853,11 +892,7 @@
       };
 
       const { error } = await withTimeout(
-        withLockRetry(() =>
-          supabase
-            .from("profiles")
-            .upsert(profilePayload, { onConflict: "id" })
-        ),
+        upsertProfileViaRest(profilePayload, "Guardar privacidad"),
         10000,
         "Guardar privacidad"
       );
@@ -984,6 +1019,7 @@
     if (supabase) {
       const authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
         const nextUser = session?.user || null;
+        authSession = session || null;
         authUser = nextUser;
         sessionUserId = nextUser?.id || "";
 
