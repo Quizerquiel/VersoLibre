@@ -370,12 +370,10 @@
     }
 
     try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData?.session?.user?.id) {
+      const userId = sessionUserId || authUser?.id || "";
+      if (!userId) {
         return { error: new Error("Tu sesion expiró. Inicia sesion de nuevo.") };
       }
-
-      const userId = sessionData.session.user.id;
       const updates = {};
 
       if (payload.p_name !== undefined) updates.name = payload.p_name;
@@ -805,7 +803,7 @@
   }
 
   async function saveProfileSettings(event) {
-    event.preventDefault();
+    event?.preventDefault?.();
     console.log("[saveProfileSettings] submit fired", {
       hasCurrentUser: Boolean(currentUser),
       hasSupabase: Boolean(supabase),
@@ -854,8 +852,8 @@
         bioLength: trimmedBio.length
       });
 
-      const { error } = await withTimeout(
-        updateCurrentProfileViaRpc(
+      const { error } = await withLockRetry(
+        () => updateCurrentProfileViaRpc(
           {
             p_name: trimmedName,
             p_username: trimmedUsername,
@@ -863,8 +861,8 @@
           },
           "Guardar perfil"
         ),
-        10000,
-        "Guardar perfil"
+        4,
+        240
       );
 
       console.log("[saveProfileSettings] rpc finished", {
@@ -925,8 +923,8 @@
     privacySettingsMessage = "";
 
     try {
-      const { error } = await withTimeout(
-        updateCurrentProfileViaRpc(
+      const { error } = await withLockRetry(
+        () => updateCurrentProfileViaRpc(
           {
             p_email_visibility: settingsEmailVisibility,
             p_profile_visibility: settingsProfileVisibility,
@@ -935,8 +933,8 @@
           },
           "Guardar privacidad"
         ),
-        10000,
-        "Guardar privacidad"
+        4,
+        240
       );
 
       if (error) {
@@ -1024,13 +1022,13 @@
     reader.onload = async () => {
       try {
         const profileImage = String(reader.result || "");
-        const { error } = await withTimeout(
-          updateCurrentProfileViaRpc(
+        const { error } = await withLockRetry(
+          () => updateCurrentProfileViaRpc(
             { p_profile_image: profileImage },
             "Guardar foto de perfil"
           ),
-          10000,
-          "Guardar foto de perfil"
+          4,
+          240
         );
 
         if (error) {
