@@ -740,6 +740,12 @@
 
   async function saveProfileSettings(event) {
     event.preventDefault();
+    console.log("[saveProfileSettings] submit fired", {
+      hasCurrentUser: Boolean(currentUser),
+      hasSupabase: Boolean(supabase),
+      authUserId: authUser?.id || null,
+      sessionUserId: sessionUserId || null
+    });
     if (!currentUser || !supabase) return;
     profileSettingsMessage = "";
 
@@ -747,13 +753,21 @@
       const trimmedName = (settingsName || currentUser.name || "").trim();
       const trimmedUsername = (settingsUsername || currentUser.username || "").trim().toLowerCase();
       const trimmedBio = settingsBio.trim();
+      console.log("[saveProfileSettings] normalized input", {
+        trimmedName,
+        trimmedUsername,
+        trimmedBio,
+        bioLength: trimmedBio.length
+      });
 
       if (trimmedName.length < 3) {
+        console.log("[saveProfileSettings] blocked by name validation");
         profileSettingsMessage = "El nombre visible debe tener al menos 3 caracteres.";
         return;
       }
 
       if (trimmedUsername.length < 3 || /\s/.test(trimmedUsername)) {
+        console.log("[saveProfileSettings] blocked by username validation");
         profileSettingsMessage = "El usuario debe tener al menos 3 caracteres y sin espacios.";
         return;
       }
@@ -763,9 +777,16 @@
       );
 
       if (usernameInUse) {
+        console.log("[saveProfileSettings] blocked by username collision", { trimmedUsername });
         profileSettingsMessage = "Ese nombre de usuario ya esta en uso.";
         return;
       }
+
+      console.log("[saveProfileSettings] calling rpc update_current_profile", {
+        name: trimmedName,
+        username: trimmedUsername,
+        bioLength: trimmedBio.length
+      });
 
       const { error } = await withTimeout(
         updateCurrentProfileViaRpc(
@@ -780,7 +801,13 @@
         "Guardar perfil"
       );
 
+      console.log("[saveProfileSettings] rpc finished", {
+        hasError: Boolean(error),
+        errorMessage: error?.message || null
+      });
+
       if (error) {
+        console.log("[saveProfileSettings] rpc error", error);
         profileSettingsMessage = error.message || "No se pudo guardar la configuracion.";
         return;
       }
@@ -788,6 +815,7 @@
       // Persist auth metadata too so reloads don't fallback to stale values
       // when profile sync is delayed.
       if (supabase) {
+        console.log("[saveProfileSettings] updating auth metadata in background");
         supabase.auth
           .updateUser({
             data: {
@@ -796,7 +824,7 @@
               bio: trimmedBio || "Sin biografia por ahora."
             }
           })
-          .catch(() => {});
+            .catch((authError) => console.log("[saveProfileSettings] auth metadata update error", authError));
       }
 
       if (authUser) {
@@ -827,11 +855,15 @@
       );
 
       profileSettingsMessage = "Perfil guardado.";
+      console.log("[saveProfileSettings] success");
       flash("Tu cuenta se actualizo correctamente.");
 
       // Refresh in background; don't fail UX if sync takes too long.
-      refreshData().catch(() => {});
+      refreshData()
+        .then(() => console.log("[saveProfileSettings] refreshData finished"))
+        .catch((refreshError) => console.log("[saveProfileSettings] refreshData error", refreshError));
     } catch (error) {
+      console.log("[saveProfileSettings] exception", error);
       profileSettingsMessage = error?.message || "No se pudo guardar la configuracion.";
     }
   }
