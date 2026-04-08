@@ -362,10 +362,34 @@
   }
 
   async function updateCurrentProfileViaRpc(payload, label) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return { error: new Error("Falta configurar Supabase en Vercel.") };
+    }
+
+    const accessToken = authSession?.access_token;
+    if (!accessToken) {
+      return { error: new Error("Tu sesion expiró. Inicia sesion de nuevo.") };
+    }
+
     try {
-      const { data, error } = await supabase.rpc("update_current_profile", payload);
-      if (error) {
-        return { error: new Error(error.message || `${label} falló.`) };
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/update_current_profile`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          data?.message ||
+          data?.error_description ||
+          data?.error ||
+          `${label} falló (${response.status}).`;
+        return { error: new Error(message) };
       }
 
       return { data, error: null };
