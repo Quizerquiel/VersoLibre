@@ -143,12 +143,10 @@
   async function refreshData() {
     if (!isSupabaseConfigured || !supabase) return;
 
-    const [profilesRes, poemsRes, reactionsRes, commentsRes] = await Promise.all([
-      supabase.from("profiles").select("*"),
-      supabase.from("poems").select("*").order("created_at", { ascending: false }),
-      supabase.from("reactions").select("*"),
-      supabase.from("comments").select("*").order("created_at", { ascending: false })
-    ]);
+    const profilesRes = await supabase.from("profiles").select("*");
+    const poemsRes = await supabase.from("poems").select("*").order("created_at", { ascending: false });
+    const reactionsRes = await supabase.from("reactions").select("*");
+    const commentsRes = await supabase.from("comments").select("*").order("created_at", { ascending: false });
 
     if (profilesRes.error) {
       flash("No pudimos cargar perfiles desde Supabase.");
@@ -982,7 +980,6 @@
     };
 
     let authListener = null;
-    let realtimeChannel = null;
 
     if (supabase) {
       const authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -1013,13 +1010,7 @@
       });
       authListener = authSubscription?.data?.subscription || null;
 
-      realtimeChannel = supabase
-        .channel("versolibre-sync")
-        .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => refreshData())
-        .on("postgres_changes", { event: "*", schema: "public", table: "poems" }, () => refreshData())
-        .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, () => refreshData())
-        .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, () => refreshData())
-        .subscribe();
+      // Realtime disabled to avoid overlapping auth-token locks while saving settings.
     }
 
     window.addEventListener("popstate", onPopState);
@@ -1027,9 +1018,6 @@
     window.addEventListener("keydown", handleKeydown);
     return () => {
       authListener?.unsubscribe();
-      if (realtimeChannel && supabase) {
-        supabase.removeChannel(realtimeChannel);
-      }
       window.removeEventListener("popstate", onPopState);
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("keydown", handleKeydown);
