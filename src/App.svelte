@@ -146,7 +146,7 @@
   async function refreshData() {
     if (!isSupabaseConfigured || !supabase) return;
 
-    const profilesRes = await fetchProfilesNoCache();
+    const profilesRes = await supabase.from("profiles").select("*");
     const poemsRes = await supabase.from("poems").select("*").order("created_at", { ascending: false });
     const reactionsRes = await supabase.from("reactions").select("*");
     const commentsRes = await supabase.from("comments").select("*").order("created_at", { ascending: false });
@@ -398,40 +398,6 @@
     }
   }
 
-  async function fetchProfilesNoCache() {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      return { data: null, error: new Error("Falta configurar Supabase en Vercel.") };
-    }
-
-    const accessToken = authSession?.access_token;
-    if (!accessToken) {
-      const { data, error } = await supabase.from("profiles").select("*");
-      return { data, error };
-    }
-
-    try {
-      const url = `${SUPABASE_URL}/rest/v1/profiles?select=*&_ts=${Date.now()}`;
-      const response = await fetch(url, {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${accessToken}`
-        }
-      });
-
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message = data?.message || data?.error_description || data?.error || "No se pudo cargar perfiles.";
-        return { data: null, error: new Error(message) };
-      }
-
-      return { data: Array.isArray(data) ? data : [], error: null };
-    } catch (error) {
-      return { data: null, error };
-    }
-  }
-
   async function toggleReaction(poemId, value) {
     if (!currentUser || !supabase) {
       flash("Inicia sesion para reaccionar.");
@@ -590,6 +556,8 @@
       return;
     }
 
+    authSession = data.session || authSession;
+    authUser = data.user;
     await ensureProfile(data.user);
     sessionUserId = data.user.id;
     await refreshData();
@@ -1115,7 +1083,28 @@
     };
   });
 
-  $: currentUser = users.find((user) => user.id === sessionUserId) || null;
+  $: currentUser =
+    users.find((user) => user.id === sessionUserId) ||
+    (authUser
+      ? {
+          id: authUser.id,
+          email: authUser.email || "",
+          name: authUser.user_metadata?.name || authUser.email?.split("@")[0] || "Autor",
+          username:
+            String(authUser.user_metadata?.username || authUser.email?.split("@")[0] || "usuario")
+              .toLowerCase()
+              .replace(/[^a-z0-9._-]/g, "")
+              .slice(0, 24) || "usuario",
+          bio: authUser.user_metadata?.bio || "Sin biografia por ahora.",
+          role: authUser.email?.toLowerCase() === ADMIN_EMAIL ? "admin" : "user",
+          profileVisibility: "public",
+          emailVisibility: "private",
+          commentPermissions: "registered",
+          sensitiveFilter: true,
+          profileImage: "",
+          joinedAt: authUser.created_at || new Date().toISOString()
+        }
+      : null);
   $: featuredPoem = poems.find((poem) => poem.status === "published") || null;
   $: moderationPoems = currentUser?.role === "admin" ? poems : [];
   $: visibleCategoryOptions = CATEGORY_OPTIONS.filter((option) => {
