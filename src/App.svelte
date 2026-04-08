@@ -254,6 +254,11 @@
   function flash(message) {
     announcement = message;
     clearTimeout(flash.timeoutId);
+  }
+
+  function canViewProfile(user) {
+    if (!user) return false;
+    if (currentUser?.role === "admin" || currentUser?.id === user.id) return true;
 
     const visibility = user.profileVisibility || "public";
     if (visibility === "public") return true;
