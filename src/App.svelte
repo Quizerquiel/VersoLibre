@@ -319,6 +319,27 @@
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
+  function isTransientLockError(error) {
+    const message = String(error?.message || "").toLowerCase();
+    return message.includes("lock \"") || message.includes("another request stole it");
+  }
+
+  async function withLockRetry(operation, attempts = 3, delayMs = 180) {
+    let lastError = null;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const result = await operation();
+      if (!result?.error) {
+        return result;
+      }
+      lastError = result.error;
+      if (!isTransientLockError(lastError) || attempt === attempts - 1) {
+        return result;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs * (attempt + 1)));
+    }
+    return { error: lastError };
+  }
+
   async function toggleReaction(poemId, value) {
     if (!currentUser || !supabase) {
       flash("Inicia sesion para reaccionar.");
@@ -727,9 +748,11 @@
       profile_image: currentUser.profileImage || ""
     };
 
-    const { error } = await supabase
-      .from("profiles")
-      .upsert(profilePayload, { onConflict: "id" });
+    const { error } = await withLockRetry(() =>
+      supabase
+        .from("profiles")
+        .upsert(profilePayload, { onConflict: "id" })
+    );
 
     if (error) {
       profileSettingsMessage = error.message || "No se pudo guardar la configuracion.";
@@ -791,9 +814,11 @@
       profile_image: currentUser.profileImage || ""
     };
 
-    const { error } = await supabase
-      .from("profiles")
-      .upsert(profilePayload, { onConflict: "id" });
+    const { error } = await withLockRetry(() =>
+      supabase
+        .from("profiles")
+        .upsert(profilePayload, { onConflict: "id" })
+    );
 
     if (error) {
       privacySettingsMessage = error.message || "No se pudo guardar la privacidad.";
