@@ -345,6 +345,21 @@
     return { error: lastError };
   }
 
+  async function withTimeout(promise, ms, label) {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`${label} tardó demasiado. Cierra otras pestañas del sitio y vuelve a intentar.`));
+      }, ms);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   async function toggleReaction(poemId, value) {
     if (!currentUser || !supabase) {
       flash("Inicia sesion para reaccionar.");
@@ -762,10 +777,14 @@
         profile_image: currentUser.profileImage || ""
       };
 
-      const { error } = await withLockRetry(() =>
-        supabase
-          .from("profiles")
-          .upsert(profilePayload, { onConflict: "id" })
+      const { error } = await withTimeout(
+        withLockRetry(() =>
+          supabase
+            .from("profiles")
+            .upsert(profilePayload, { onConflict: "id" })
+        ),
+        10000,
+        "Guardar perfil"
       );
 
       console.log("[saveProfileSettings] upsert finished", {
@@ -805,7 +824,7 @@
           : user
       );
 
-      await refreshData();
+      await withTimeout(refreshData(), 10000, "Sincronizar perfil");
       profileSettingsMessage = "Perfil guardado.";
       console.log("[saveProfileSettings] success");
       flash("Tu cuenta se actualizo correctamente.");
@@ -835,10 +854,14 @@
         profile_image: currentUser.profileImage || ""
       };
 
-      const { error } = await withLockRetry(() =>
-        supabase
-          .from("profiles")
-          .upsert(profilePayload, { onConflict: "id" })
+      const { error } = await withTimeout(
+        withLockRetry(() =>
+          supabase
+            .from("profiles")
+            .upsert(profilePayload, { onConflict: "id" })
+        ),
+        10000,
+        "Guardar privacidad"
       );
 
       if (error) {
@@ -846,7 +869,7 @@
         return;
       }
 
-      await refreshData();
+      await withTimeout(refreshData(), 10000, "Sincronizar privacidad");
       privacySettingsMessage = "Privacidad guardada.";
       flash("Tu privacidad se actualizo correctamente.");
     } catch (error) {
