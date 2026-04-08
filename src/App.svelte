@@ -25,6 +25,7 @@
   let poems = [];
   let reactions = [];
   let comments = [];
+  let authUser = null;
   let sessionUserId = "";
   let currentPath = "/";
   let visibleCount = FEED_BATCH;
@@ -148,27 +149,42 @@
       supabase.from("comments").select("*").order("created_at", { ascending: false })
     ]);
 
-    if (profilesRes.error || poemsRes.error || reactionsRes.error || commentsRes.error) {
-      flash("No pudimos cargar datos desde Supabase.");
-      return;
+    if (profilesRes.error) {
+      flash("No pudimos cargar perfiles desde Supabase.");
+    } else {
+      users = (profilesRes.data || []).map(mapProfile);
     }
 
-    users = (profilesRes.data || []).map(mapProfile);
     const profileById = new Map(users.map((user) => [user.id, user]));
-    poems = (poemsRes.data || []).map((row) => mapPoem(row, profileById));
-    reactions = (reactionsRes.data || []).map((row) => ({
-      poemId: row.poem_id,
-      userId: row.user_id,
-      value: row.value
-    }));
-    comments = (commentsRes.data || []).map((row) => ({
-      id: row.id,
-      poemId: row.poem_id,
-      userId: row.user_id,
-      author: row.author_name || profileById.get(row.user_id)?.name || "Autor",
-      content: row.content,
-      createdAt: row.created_at
-    }));
+
+    if (poemsRes.error) {
+      flash("No pudimos cargar poemas desde Supabase.");
+    } else {
+      poems = (poemsRes.data || []).map((row) => mapPoem(row, profileById));
+    }
+
+    if (reactionsRes.error) {
+      flash("No pudimos cargar reacciones desde Supabase.");
+    } else {
+      reactions = (reactionsRes.data || []).map((row) => ({
+        poemId: row.poem_id,
+        userId: row.user_id,
+        value: row.value
+      }));
+    }
+
+    if (commentsRes.error) {
+      flash("No pudimos cargar comentarios desde Supabase.");
+    } else {
+      comments = (commentsRes.data || []).map((row) => ({
+        id: row.id,
+        poemId: row.poem_id,
+        userId: row.user_id,
+        author: row.author_name || profileById.get(row.user_id)?.name || "Autor",
+        content: row.content,
+        createdAt: row.created_at
+      }));
+    }
   }
 
   async function bootstrapState() {
@@ -178,8 +194,9 @@
     }
 
     const { data: { session } } = await supabase.auth.getSession();
-    sessionUserId = session?.user?.id || "";
-    await ensureProfile(session?.user || null);
+    authUser = session?.user || null;
+    sessionUserId = authUser?.id || "";
+    await ensureProfile(authUser);
     await refreshData();
   }
 
@@ -656,6 +673,7 @@
     if (supabase) {
       await supabase.auth.signOut();
     }
+    authUser = null;
     sessionUserId = "";
     mobileMenuOpen = false;
     flash("Sesion cerrada.");
@@ -835,6 +853,7 @@
     if (supabase) {
       const authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
         const nextUser = session?.user || null;
+        authUser = nextUser;
         sessionUserId = nextUser?.id || "";
         if (event === "PASSWORD_RECOVERY") {
           currentPath = "/reset-password";
@@ -869,7 +888,28 @@
     };
   });
 
-  $: currentUser = users.find((user) => user.id === sessionUserId) || null;
+  $: currentUser =
+    users.find((user) => user.id === sessionUserId) ||
+    (authUser
+      ? {
+          id: authUser.id,
+          email: authUser.email || "",
+          name: authUser.user_metadata?.name || authUser.email?.split("@")[0] || "Autor",
+          username:
+            String(authUser.user_metadata?.username || authUser.email?.split("@")[0] || "usuario")
+              .toLowerCase()
+              .replace(/[^a-z0-9._-]/g, "")
+              .slice(0, 24) || "usuario",
+          bio: authUser.user_metadata?.bio || "Sin biografia por ahora.",
+          role: authUser.email?.toLowerCase() === ADMIN_EMAIL ? "admin" : "user",
+          profileVisibility: "public",
+          emailVisibility: "private",
+          commentPermissions: "registered",
+          sensitiveFilter: true,
+          profileImage: "",
+          joinedAt: authUser.created_at || new Date().toISOString()
+        }
+      : null);
   $: featuredPoem = poems.find((poem) => poem.status === "published") || null;
   $: moderationPoems = currentUser?.role === "admin" ? poems : [];
   $: visibleCategoryOptions = CATEGORY_OPTIONS.filter((option) => {
