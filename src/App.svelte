@@ -595,8 +595,19 @@
 
     authSession = data.session || authSession;
     authUser = data.user;
-    await ensureProfile(data.user);
     sessionUserId = data.user.id;
+
+    // Manually save session to localStorage to ensure persistence
+    if (data.session) {
+      const sessionData = {
+        user: data.user,
+        session: data.session
+      };
+      localStorage.setItem('sb-verso-libre-auth-token', JSON.stringify(sessionData));
+      console.log("[handleLogin] Session saved to localStorage");
+    }
+
+    await ensureProfile(data.user);
     await refreshData();
 
     loginEmail = "";
@@ -1083,6 +1094,17 @@
         authSession = session || null;
         authUser = nextUser;
         sessionUserId = nextUser?.id || "";
+
+        // Save session to localStorage on auth state changes
+        if (session) {
+          const sessionData = {
+            user: nextUser,
+            session: session
+          };
+          localStorage.setItem('sb-verso-libre-auth-token', JSON.stringify(sessionData));
+        } else if (event === "SIGNED_OUT") {
+          localStorage.removeItem('sb-verso-libre-auth-token');
+        }
 
         if (event === "PASSWORD_RECOVERY") {
           currentPath = "/reset-password";
