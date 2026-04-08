@@ -52,7 +52,8 @@
   let publishMessage = "";
   let mobileMenuOpen = false;
   let settingsLoadedUserId = "";
-  let settingsMessage = "";
+  let profileSettingsMessage = "";
+  let privacySettingsMessage = "";
   let passwordMessage = "";
   let bioExpanded = false;
   let settingsName = "";
@@ -683,19 +684,19 @@
   async function saveProfileSettings(event) {
     event.preventDefault();
     if (!currentUser || !supabase) return;
-    settingsMessage = "";
+    profileSettingsMessage = "";
 
     const trimmedName = (settingsName || currentUser.name || "").trim();
     const trimmedUsername = (settingsUsername || currentUser.username || "").trim().toLowerCase();
     const trimmedBio = settingsBio.trim();
 
     if (trimmedName.length < 3) {
-      settingsMessage = "El nombre visible debe tener al menos 3 caracteres.";
+      profileSettingsMessage = "El nombre visible debe tener al menos 3 caracteres.";
       return;
     }
 
     if (trimmedUsername.length < 3 || /\s/.test(trimmedUsername)) {
-      settingsMessage = "El usuario debe tener al menos 3 caracteres y sin espacios.";
+      profileSettingsMessage = "El usuario debe tener al menos 3 caracteres y sin espacios.";
       return;
     }
 
@@ -704,7 +705,7 @@
     );
 
     if (usernameInUse) {
-      settingsMessage = "Ese nombre de usuario ya esta en uso.";
+      profileSettingsMessage = "Ese nombre de usuario ya esta en uso.";
       return;
     }
 
@@ -731,18 +732,21 @@
       .upsert(profilePayload, { onConflict: "id" });
 
     if (error) {
-      settingsMessage = error.message || "No se pudo guardar la configuracion.";
+      profileSettingsMessage = error.message || "No se pudo guardar la configuracion.";
       return;
     }
 
-    // Keep auth metadata aligned so fallback user state does not look reverted.
-    await supabase.auth.updateUser({
-      data: {
-        name: trimmedName,
-        username: trimmedUsername,
-        bio: trimmedBio || "Sin biografia por ahora."
-      }
-    });
+    if (authUser) {
+      authUser = {
+        ...authUser,
+        user_metadata: {
+          ...(authUser.user_metadata || {}),
+          name: trimmedName,
+          username: trimmedUsername,
+          bio: trimmedBio || "Sin biografia por ahora."
+        }
+      };
+    }
 
     users = users.map((user) =>
       user.id === currentUser.id
@@ -759,47 +763,47 @@
         : user
     );
 
-      await refreshData();
-    settingsMessage = "Configuracion guardada.";
+    await refreshData();
+    profileSettingsMessage = "Perfil guardado.";
     flash("Tu cuenta se actualizo correctamente.");
   }
 
-    async function savePrivacySettings(event) {
-      event.preventDefault();
-      if (!currentUser || !supabase) return;
-      settingsMessage = "";
+  async function savePrivacySettings(event) {
+    event.preventDefault();
+    if (!currentUser || !supabase) return;
+    privacySettingsMessage = "";
 
-      if (authUser) {
-        await ensureProfile(authUser);
-      }
-
-      const profilePayload = {
-        id: currentUser.id,
-        email: currentUser.email || authUser?.email || "",
-        name: currentUser.name || authUser?.user_metadata?.name || "Autor",
-        username: currentUser.username || "usuario",
-        bio: currentUser.bio || "Sin biografia por ahora.",
-        role: currentUser.role || "user",
-        email_visibility: settingsEmailVisibility,
-        profile_visibility: settingsProfileVisibility,
-        comment_permissions: settingsCommentPermissions,
-        sensitive_filter: settingsSensitiveFilter,
-        profile_image: currentUser.profileImage || ""
-      };
-
-      const { error } = await supabase
-        .from("profiles")
-        .upsert(profilePayload, { onConflict: "id" });
-
-      if (error) {
-        settingsMessage = error.message || "No se pudo guardar la privacidad.";
-        return;
-      }
-
-      await refreshData();
-      settingsMessage = "Privacidad guardada.";
-      flash("Tu privacidad se actualizo correctamente.");
+    if (authUser) {
+      await ensureProfile(authUser);
     }
+
+    const profilePayload = {
+      id: currentUser.id,
+      email: currentUser.email || authUser?.email || "",
+      name: currentUser.name || authUser?.user_metadata?.name || "Autor",
+      username: currentUser.username || "usuario",
+      bio: currentUser.bio || "Sin biografia por ahora.",
+      role: currentUser.role || "user",
+      email_visibility: settingsEmailVisibility,
+      profile_visibility: settingsProfileVisibility,
+      comment_permissions: settingsCommentPermissions,
+      sensitive_filter: settingsSensitiveFilter,
+      profile_image: currentUser.profileImage || ""
+    };
+
+    const { error } = await supabase
+      .from("profiles")
+      .upsert(profilePayload, { onConflict: "id" });
+
+    if (error) {
+      privacySettingsMessage = error.message || "No se pudo guardar la privacidad.";
+      return;
+    }
+
+    await refreshData();
+    privacySettingsMessage = "Privacidad guardada.";
+    flash("Tu privacidad se actualizo correctamente.");
+  }
 
   async function savePasswordSettings(event) {
     event.preventDefault();
@@ -852,7 +856,7 @@
     if (!file || !currentUser || !supabase) return;
 
     if (!file.type.startsWith("image/")) {
-      settingsMessage = "Selecciona una imagen valida para la foto de perfil.";
+      profileSettingsMessage = "Selecciona una imagen valida para la foto de perfil.";
       return;
     }
 
@@ -864,14 +868,14 @@
         .update({ profile_image: profileImage })
         .eq("id", currentUser.id);
       if (error) {
-        settingsMessage = "No pudimos actualizar tu foto de perfil.";
+        profileSettingsMessage = "No pudimos actualizar tu foto de perfil.";
         return;
       }
 
       users = users.map((user) =>
         user.id === currentUser.id ? { ...user, profileImage } : user
       );
-      settingsMessage = "Foto de perfil actualizada.";
+      profileSettingsMessage = "Foto de perfil actualizada.";
       flash("Tu foto de perfil se actualizo.");
     };
     reader.readAsDataURL(file);
@@ -1040,7 +1044,8 @@
     settingsProfileVisibility = currentUser.profileVisibility || "public";
     settingsCommentPermissions = currentUser.commentPermissions || "registered";
     settingsSensitiveFilter = currentUser.sensitiveFilter ?? true;
-    settingsMessage = "";
+    profileSettingsMessage = "";
+    privacySettingsMessage = "";
     passwordMessage = "";
     bioExpanded = false;
     currentPassword = "";
@@ -1671,7 +1676,7 @@
                   <textarea bind:value={settingsBio} rows="4"></textarea>
                 </label>
                 <button class="primary-btn" type="submit">Guardar perfil</button>
-                <p class="form-note" aria-live="polite">{settingsMessage}</p>
+                <p class="form-note" aria-live="polite">{profileSettingsMessage}</p>
               </form>
 
               <form class="settings-card stack-form" on:submit={savePrivacySettings}>
@@ -1705,7 +1710,7 @@
                   <span>Filtrar contenido sensible en tu feed</span>
                 </label>
                 <button class="primary-btn" type="submit">Guardar privacidad</button>
-                <p class="form-note" aria-live="polite">{settingsMessage}</p>
+                <p class="form-note" aria-live="polite">{privacySettingsMessage}</p>
               </form>
 
               <form class="settings-card stack-form" on:submit={savePasswordSettings}>
