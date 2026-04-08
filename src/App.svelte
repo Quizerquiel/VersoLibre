@@ -1116,7 +1116,12 @@
         authSession = session || null;
         authUser = nextUser;
         sessionUserId = nextUser?.id || "";
-        persistSession(session);
+
+        if (event === "SIGNED_OUT") {
+          persistSession(null);
+        } else if (session) {
+          persistSession(session);
+        }
 
         if (event === "PASSWORD_RECOVERY") {
           currentPath = "/reset-password";
