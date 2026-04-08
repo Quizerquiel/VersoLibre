@@ -327,7 +327,12 @@
   async function withLockRetry(operation, attempts = 3, delayMs = 180) {
     let lastError = null;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const result = await operation();
+      let result;
+      try {
+        result = await operation();
+      } catch (error) {
+        result = { error };
+      }
       if (!result?.error) {
         return result;
       }
@@ -707,88 +712,88 @@
     if (!currentUser || !supabase) return;
     profileSettingsMessage = "";
 
-    const trimmedName = (settingsName || currentUser.name || "").trim();
-    const trimmedUsername = (settingsUsername || currentUser.username || "").trim().toLowerCase();
-    const trimmedBio = settingsBio.trim();
+    try {
+      const trimmedName = (settingsName || currentUser.name || "").trim();
+      const trimmedUsername = (settingsUsername || currentUser.username || "").trim().toLowerCase();
+      const trimmedBio = settingsBio.trim();
 
-    if (trimmedName.length < 3) {
-      profileSettingsMessage = "El nombre visible debe tener al menos 3 caracteres.";
-      return;
-    }
+      if (trimmedName.length < 3) {
+        profileSettingsMessage = "El nombre visible debe tener al menos 3 caracteres.";
+        return;
+      }
 
-    if (trimmedUsername.length < 3 || /\s/.test(trimmedUsername)) {
-      profileSettingsMessage = "El usuario debe tener al menos 3 caracteres y sin espacios.";
-      return;
-    }
+      if (trimmedUsername.length < 3 || /\s/.test(trimmedUsername)) {
+        profileSettingsMessage = "El usuario debe tener al menos 3 caracteres y sin espacios.";
+        return;
+      }
 
-    const usernameInUse = users.some(
-      (user) => user.id !== currentUser.id && user.username.toLowerCase() === trimmedUsername
-    );
+      const usernameInUse = users.some(
+        (user) => user.id !== currentUser.id && user.username.toLowerCase() === trimmedUsername
+      );
 
-    if (usernameInUse) {
-      profileSettingsMessage = "Ese nombre de usuario ya esta en uso.";
-      return;
-    }
+      if (usernameInUse) {
+        profileSettingsMessage = "Ese nombre de usuario ya esta en uso.";
+        return;
+      }
 
-    if (authUser) {
-      await ensureProfile(authUser);
-    }
-
-    const profilePayload = {
-      id: currentUser.id,
-      email: currentUser.email || authUser?.email || "",
-      name: trimmedName,
-      username: trimmedUsername,
-      bio: trimmedBio || "Sin biografia por ahora.",
-      role: currentUser.role || "user",
-      email_visibility: currentUser.emailVisibility || "private",
-      profile_visibility: currentUser.profileVisibility || "public",
-      comment_permissions: currentUser.commentPermissions || "registered",
-      sensitive_filter: currentUser.sensitiveFilter ?? true,
-      profile_image: currentUser.profileImage || ""
-    };
-
-    const { error } = await withLockRetry(() =>
-      supabase
-        .from("profiles")
-        .upsert(profilePayload, { onConflict: "id" })
-    );
-
-    if (error) {
-      profileSettingsMessage = error.message || "No se pudo guardar la configuracion.";
-      return;
-    }
-
-    if (authUser) {
-      authUser = {
-        ...authUser,
-        user_metadata: {
-          ...(authUser.user_metadata || {}),
-          name: trimmedName,
-          username: trimmedUsername,
-          bio: trimmedBio || "Sin biografia por ahora."
-        }
+      const profilePayload = {
+        id: currentUser.id,
+        email: currentUser.email || authUser?.email || "",
+        name: trimmedName,
+        username: trimmedUsername,
+        bio: trimmedBio || "Sin biografia por ahora.",
+        role: currentUser.role || "user",
+        email_visibility: currentUser.emailVisibility || "private",
+        profile_visibility: currentUser.profileVisibility || "public",
+        comment_permissions: currentUser.commentPermissions || "registered",
+        sensitive_filter: currentUser.sensitiveFilter ?? true,
+        profile_image: currentUser.profileImage || ""
       };
-    }
 
-    users = users.map((user) =>
-      user.id === currentUser.id
-        ? {
-            ...user,
+      const { error } = await withLockRetry(() =>
+        supabase
+          .from("profiles")
+          .upsert(profilePayload, { onConflict: "id" })
+      );
+
+      if (error) {
+        profileSettingsMessage = error.message || "No se pudo guardar la configuracion.";
+        return;
+      }
+
+      if (authUser) {
+        authUser = {
+          ...authUser,
+          user_metadata: {
+            ...(authUser.user_metadata || {}),
             name: trimmedName,
             username: trimmedUsername,
-            bio: trimmedBio || "Sin biografia por ahora.",
-            emailVisibility: settingsEmailVisibility,
-            profileVisibility: settingsProfileVisibility,
-            commentPermissions: settingsCommentPermissions,
-            sensitiveFilter: settingsSensitiveFilter
+            bio: trimmedBio || "Sin biografia por ahora."
           }
-        : user
-    );
+        };
+      }
 
-    await refreshData();
-    profileSettingsMessage = "Perfil guardado.";
-    flash("Tu cuenta se actualizo correctamente.");
+      users = users.map((user) =>
+        user.id === currentUser.id
+          ? {
+              ...user,
+              name: trimmedName,
+              username: trimmedUsername,
+              bio: trimmedBio || "Sin biografia por ahora.",
+              emailVisibility: settingsEmailVisibility,
+              profileVisibility: settingsProfileVisibility,
+              commentPermissions: settingsCommentPermissions,
+              sensitiveFilter: settingsSensitiveFilter
+            }
+          : user
+      );
+
+      await refreshData();
+      profileSettingsMessage = "Perfil guardado.";
+      flash("Tu cuenta se actualizo correctamente.");
+    } catch (error) {
+      profileSettingsMessage = error?.message || "No se pudo guardar la configuracion.";
+    }
   }
 
   async function savePrivacySettings(event) {
@@ -796,38 +801,38 @@
     if (!currentUser || !supabase) return;
     privacySettingsMessage = "";
 
-    if (authUser) {
-      await ensureProfile(authUser);
+    try {
+      const profilePayload = {
+        id: currentUser.id,
+        email: currentUser.email || authUser?.email || "",
+        name: currentUser.name || authUser?.user_metadata?.name || "Autor",
+        username: currentUser.username || "usuario",
+        bio: currentUser.bio || "Sin biografia por ahora.",
+        role: currentUser.role || "user",
+        email_visibility: settingsEmailVisibility,
+        profile_visibility: settingsProfileVisibility,
+        comment_permissions: settingsCommentPermissions,
+        sensitive_filter: settingsSensitiveFilter,
+        profile_image: currentUser.profileImage || ""
+      };
+
+      const { error } = await withLockRetry(() =>
+        supabase
+          .from("profiles")
+          .upsert(profilePayload, { onConflict: "id" })
+      );
+
+      if (error) {
+        privacySettingsMessage = error.message || "No se pudo guardar la privacidad.";
+        return;
+      }
+
+      await refreshData();
+      privacySettingsMessage = "Privacidad guardada.";
+      flash("Tu privacidad se actualizo correctamente.");
+    } catch (error) {
+      privacySettingsMessage = error?.message || "No se pudo guardar la privacidad.";
     }
-
-    const profilePayload = {
-      id: currentUser.id,
-      email: currentUser.email || authUser?.email || "",
-      name: currentUser.name || authUser?.user_metadata?.name || "Autor",
-      username: currentUser.username || "usuario",
-      bio: currentUser.bio || "Sin biografia por ahora.",
-      role: currentUser.role || "user",
-      email_visibility: settingsEmailVisibility,
-      profile_visibility: settingsProfileVisibility,
-      comment_permissions: settingsCommentPermissions,
-      sensitive_filter: settingsSensitiveFilter,
-      profile_image: currentUser.profileImage || ""
-    };
-
-    const { error } = await withLockRetry(() =>
-      supabase
-        .from("profiles")
-        .upsert(profilePayload, { onConflict: "id" })
-    );
-
-    if (error) {
-      privacySettingsMessage = error.message || "No se pudo guardar la privacidad.";
-      return;
-    }
-
-    await refreshData();
-    privacySettingsMessage = "Privacidad guardada.";
-    flash("Tu privacidad se actualizo correctamente.");
   }
 
   async function savePasswordSettings(event) {
