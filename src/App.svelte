@@ -721,9 +721,18 @@
       .eq("id", currentUser.id);
 
     if (error) {
-      settingsMessage = "No se pudo guardar la configuracion.";
+      settingsMessage = error.message || "No se pudo guardar la configuracion.";
       return;
     }
+
+    // Keep auth metadata aligned so fallback user state does not look reverted.
+    await supabase.auth.updateUser({
+      data: {
+        name: trimmedName,
+        username: trimmedUsername,
+        bio: trimmedBio || "Sin biografia por ahora."
+      }
+    });
 
     users = users.map((user) =>
       user.id === currentUser.id
@@ -739,6 +748,8 @@
           }
         : user
     );
+
+      await refreshData();
     settingsMessage = "Configuracion guardada.";
     flash("Tu cuenta se actualizo correctamente.");
   }
