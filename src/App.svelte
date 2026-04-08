@@ -194,21 +194,30 @@
   async function bootstrapState() {
     if (!isSupabaseConfigured || !supabase) {
       announcement = "Configura Supabase para activar autenticacion y base de datos real.";
+      authReady = true;
       return;
     }
 
     authReady = false;
-    await restorePersistedSession();
+    try {
+      await Promise.race([
+        restorePersistedSession(),
+        new Promise((resolve) => setTimeout(resolve, 1500))
+      ]);
 
-    const { data: { session } } = await supabase.auth.getSession();
-    authSession = session || null;
-    authUser = session?.user || null;
-    sessionUserId = authUser?.id || "";
-    if (authUser) {
-      await ensureProfile(authUser);
+      const { data: { session } } = await supabase.auth.getSession();
+      authSession = session || null;
+      authUser = session?.user || null;
+      sessionUserId = authUser?.id || "";
+      if (authUser) {
+        await ensureProfile(authUser);
+      }
+      await refreshData();
+    } catch (error) {
+      void error;
+    } finally {
+      authReady = true;
     }
-    await refreshData();
-    authReady = true;
   }
 
   function normalizePath(pathname) {
