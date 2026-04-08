@@ -569,8 +569,9 @@
       return;
     }
 
+    loginMessage = "";
     const email = loginEmail.trim().toLowerCase();
-    const password = loginPassword.trim();
+    const password = loginPassword;
 
     if (!validEmail(email)) {
       loginMessage = "Ingresa un correo valido.";
@@ -587,14 +588,17 @@
     authUser = data.user;
     sessionUserId = data.user.id;
 
-    await ensureProfile(data.user);
-    await refreshData();
-
     loginEmail = "";
     loginPassword = "";
-    loginMessage = "";
     flash(`Bienvenido, ${data.user.user_metadata?.name || "autor"}.`);
     navigate("/perfil");
+
+    // Do not block login if sync fails; user should still enter.
+    ensureProfile(data.user)
+      .then(() => refreshData())
+      .catch((syncError) => {
+        console.log("[handleLogin] post-login sync error", syncError);
+      });
   }
 
   async function handleForgotPassword() {
@@ -1094,10 +1098,14 @@
         // while user saves settings.
         const shouldSyncProfile = ["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED"].includes(event);
         if (shouldSyncProfile) {
-          if (nextUser) {
-            await ensureProfile(nextUser);
+          try {
+            if (nextUser) {
+              await ensureProfile(nextUser);
+            }
+            await refreshData();
+          } catch (syncError) {
+            console.log("[onAuthStateChange] sync error", syncError);
           }
-          await refreshData();
         }
 
         if (event === "SIGNED_OUT") {
@@ -1827,7 +1835,7 @@
                   <span>Biografia</span>
                   <textarea bind:value={settingsBio} rows="4"></textarea>
                 </label>
-                <button class="primary-btn" type="submit">Guardar perfil</button>
+                <button class="primary-btn" type="button" on:click={saveProfileSettings}>Guardar perfil</button>
                 <p class="form-note" aria-live="polite">{profileSettingsMessage}</p>
               </form>
 
