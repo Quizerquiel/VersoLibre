@@ -1068,6 +1068,9 @@
   }
 
   onMount(() => {
+    // Cleanup legacy key from previous auth workaround.
+    localStorage.removeItem("sb-verso-libre-auth-token");
+
     bootstrapState();
     currentPath = normalizePath(window.location.pathname);
     if (currentPath === "/autor") {
