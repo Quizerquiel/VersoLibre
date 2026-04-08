@@ -9,7 +9,7 @@
 
   const ADMIN_EMAIL = "padillajosueezequiel@gmail.com";
   const FEED_BATCH = 6;
-  const routes = new Set(["/", "/poemas", "/publicar", "/login", "/registro", "/perfil", "/autor", "/configuracion", "/admin"]);
+  const routes = new Set(["/", "/poemas", "/publicar", "/login", "/registro", "/reset-password", "/perfil", "/autor", "/configuracion", "/admin"]);
   const CATEGORY_OPTIONS = [
     { id: "amor", label: "Amor", aliases: ["romance", "romantico", "deseo", "pareja", "corazon"] },
     { id: "nostalgia", label: "Nostalgia", aliases: ["memoria", "recuerdo", "ausencia", "melancolia"] },
@@ -64,6 +64,9 @@
   let currentPassword = "";
   let newPassword = "";
   let confirmPassword = "";
+  let resetNewPassword = "";
+  let resetConfirmPassword = "";
+  let resetPasswordMessage = "";
   let profilePhotoInput;
   let activePoemId = "";
   let activePoemComment = "";
@@ -452,7 +455,7 @@
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error || !data.user) {
-      loginMessage = "Correo o contrasena incorrectos.";
+      loginMessage = error?.message || "No pudimos iniciar sesion.";
       return;
     }
 
@@ -465,6 +468,29 @@
     loginMessage = "";
     flash(`Bienvenido, ${data.user.user_metadata?.name || "autor"}.`);
     navigate("/perfil");
+  }
+
+  async function handleForgotPassword() {
+    if (!supabase) {
+      loginMessage = "Falta configurar Supabase.";
+      return;
+    }
+
+    const email = loginEmail.trim().toLowerCase();
+    if (!validEmail(email)) {
+      loginMessage = "Escribe tu correo para enviarte el enlace de recuperacion.";
+      return;
+    }
+
+    const redirectTo = `${window.location.origin}/reset-password`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) {
+      loginMessage = error.message || "No pudimos enviar el correo de recuperacion.";
+      return;
+    }
+
+    loginMessage = "Te enviamos un correo para restablecer tu contrasena.";
+    flash("Correo de recuperacion enviado.");
   }
 
   async function handleRegister(event) {
@@ -498,6 +524,7 @@
       email,
       password,
       options: {
+        emailRedirectTo: `${window.location.origin}/login`,
         data: {
           name,
           username,
@@ -507,9 +534,7 @@
     });
 
     if (error) {
-      registerMessage = error.message.includes("already registered")
-        ? "Ese correo ya esta registrado."
-        : "No se pudo crear la cuenta.";
+      registerMessage = error.message || "No se pudo crear la cuenta.";
       return;
     }
 
@@ -534,6 +559,53 @@
 
     registerMessage = "Cuenta creada. Revisa tu correo para verificarla y luego inicia sesion.";
     flash("Te enviamos un correo de verificacion.");
+    navigate("/login");
+  }
+
+  async function handleResetPassword(event) {
+    event.preventDefault();
+    if (!supabase) {
+      resetPasswordMessage = "Falta configurar Supabase.";
+      return;
+    }
+
+    const nextPassword = resetNewPassword.trim();
+    const confirmedPassword = resetConfirmPassword.trim();
+
+    if (nextPassword.length < 6) {
+      resetPasswordMessage = "La nueva contrasena debe tener al menos 6 caracteres.";
+      return;
+    }
+
+    if (nextPassword.length > 64) {
+      resetPasswordMessage = "La nueva contrasena no puede superar 64 caracteres.";
+      return;
+    }
+
+    if (nextPassword !== confirmedPassword) {
+      resetPasswordMessage = "La confirmacion no coincide.";
+      return;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      resetPasswordMessage = "Abre el enlace de recuperacion desde el correo en este mismo navegador.";
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: nextPassword });
+    if (error) {
+      resetPasswordMessage = error.message || "No pudimos actualizar tu contrasena.";
+      return;
+    }
+
+    await supabase.auth.signOut();
+    sessionUserId = "";
+    resetNewPassword = "";
+    resetConfirmPassword = "";
+    resetPasswordMessage = "";
+    loginMessage = "Contrasena actualizada. Ahora inicia sesion con tu nueva clave.";
+    flash("Contrasena actualizada.");
     navigate("/login");
   }
 
@@ -668,7 +740,7 @@
       password: currentPassword
     });
     if (reauthError) {
-      passwordMessage = "La contrasena actual no coincide.";
+      passwordMessage = reauthError.message || "La contrasena actual no coincide.";
       return;
     }
 
@@ -684,7 +756,7 @@
 
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) {
-      passwordMessage = "No pudimos actualizar tu contrasena.";
+      passwordMessage = error.message || "No pudimos actualizar tu contrasena.";
       return;
     }
 
@@ -761,9 +833,14 @@
     let realtimeChannel = null;
 
     if (supabase) {
-      const authSubscription = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
         const nextUser = session?.user || null;
         sessionUserId = nextUser?.id || "";
+        if (event === "PASSWORD_RECOVERY") {
+          currentPath = "/reset-password";
+          window.history.replaceState({}, "", "/reset-password");
+          resetPasswordMessage = "Escribe tu nueva contrasena para recuperar el acceso.";
+        }
         await ensureProfile(nextUser);
         await refreshData();
       });
@@ -1212,7 +1289,42 @@
             </div>
           </form>
           <p class="login-inline-link">
+            <button
+              type="button"
+              class="text-link"
+              style="background: none; border: 0; padding: 0; cursor: pointer;"
+              on:click={handleForgotPassword}
+            >
+              Olvidé mi contraseña
+            </button>
+          </p>
+          <p class="login-inline-link">
             <a href="/registro" class="text-link" on:click|preventDefault={() => navigate("/registro")}>Crear una cuenta nueva</a>
+          </p>
+        </article>
+      </section>
+    {:else if currentPath === "/reset-password"}
+      <section class="auth-layout login-only">
+        <article class="auth-card">
+          <p class="eyebrow">Recuperación</p>
+          <h2>Nueva contraseña</h2>
+          <p class="section-copy">Abre el enlace del correo de recuperacion en este mismo navegador y define una clave nueva.</p>
+          <form class="stack-form" on:submit={handleResetPassword}>
+            <label>
+              <span>Nueva contraseña</span>
+              <input bind:value={resetNewPassword} type="password" maxlength="64" autocomplete="new-password" required />
+            </label>
+            <label>
+              <span>Confirmar nueva contraseña</span>
+              <input bind:value={resetConfirmPassword} type="password" maxlength="64" autocomplete="new-password" required />
+            </label>
+            <div class="form-actions">
+              <button class="primary-btn" type="submit">Actualizar contraseña</button>
+              <p class="form-note" aria-live="polite">{resetPasswordMessage}</p>
+            </div>
+          </form>
+          <p class="login-inline-link">
+            <a href="/login" class="text-link" on:click|preventDefault={() => navigate("/login")}>Volver a iniciar sesión</a>
           </p>
         </article>
       </section>
