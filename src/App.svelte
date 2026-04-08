@@ -394,6 +394,52 @@
         return { error: new Error(message) };
       }
 
+      if (Array.isArray(data) && data.length === 0) {
+        return { error: new Error(`${label} no aplicó cambios en Supabase.`) };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return { error };
+    }
+  }
+
+  async function upsertProfileFullViaRest(profilePayload, label) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return { error: new Error("Falta configurar Supabase en Vercel.") };
+    }
+
+    const accessToken = authSession?.access_token;
+    if (!accessToken) {
+      return { error: new Error("Tu sesion expiró. Inicia sesion de nuevo.") };
+    }
+
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?on_conflict=id`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=representation"
+        },
+        body: JSON.stringify(profilePayload)
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          data?.message ||
+          data?.error_description ||
+          data?.error ||
+          `${label} falló (${response.status}).`;
+        return { error: new Error(message) };
+      }
+
+      if (Array.isArray(data) && data.length === 0) {
+        return { error: new Error(`${label} no devolvió cambios.`) };
+      }
+
       return { data, error: null };
     } catch (error) {
       return { error };
@@ -807,8 +853,30 @@
       );
 
       if (error) {
-        profileSettingsMessage = error.message || "No se pudo guardar la configuracion.";
-        return;
+        const fullPayload = {
+          id: currentUser.id,
+          email: currentUser.email || authUser?.email || "",
+          name: trimmedName,
+          username: trimmedUsername,
+          bio: trimmedBio || "Sin biografia por ahora.",
+          role: currentUser.role || "user",
+          profile_visibility: currentUser.profileVisibility || "public",
+          email_visibility: currentUser.emailVisibility || "private",
+          comment_permissions: currentUser.commentPermissions || "registered",
+          sensitive_filter: currentUser.sensitiveFilter ?? true,
+          profile_image: currentUser.profileImage || ""
+        };
+
+        const fallback = await withTimeout(
+          upsertProfileFullViaRest(fullPayload, "Guardar perfil"),
+          10000,
+          "Guardar perfil"
+        );
+
+        if (fallback.error) {
+          profileSettingsMessage = fallback.error.message || error.message || "No se pudo guardar la configuracion.";
+          return;
+        }
       }
 
       // Persist auth metadata too so reloads don't fallback to stale values
@@ -884,8 +952,30 @@
       );
 
       if (error) {
-        privacySettingsMessage = error.message || "No se pudo guardar la privacidad.";
-        return;
+        const fullPayload = {
+          id: currentUser.id,
+          email: currentUser.email || authUser?.email || "",
+          name: currentUser.name || authUser?.user_metadata?.name || "Autor",
+          username: currentUser.username || "usuario",
+          bio: currentUser.bio || "Sin biografia por ahora.",
+          role: currentUser.role || "user",
+          profile_visibility: settingsProfileVisibility,
+          email_visibility: settingsEmailVisibility,
+          comment_permissions: settingsCommentPermissions,
+          sensitive_filter: settingsSensitiveFilter,
+          profile_image: currentUser.profileImage || ""
+        };
+
+        const fallback = await withTimeout(
+          upsertProfileFullViaRest(fullPayload, "Guardar privacidad"),
+          10000,
+          "Guardar privacidad"
+        );
+
+        if (fallback.error) {
+          privacySettingsMessage = fallback.error.message || error.message || "No se pudo guardar la privacidad.";
+          return;
+        }
       }
 
       users = users.map((user) =>
@@ -979,8 +1069,30 @@
         );
 
         if (error) {
-          profileSettingsMessage = error.message || "No pudimos actualizar tu foto de perfil.";
-          return;
+          const fullPayload = {
+            id: currentUser.id,
+            email: currentUser.email || authUser?.email || "",
+            name: currentUser.name || authUser?.user_metadata?.name || "Autor",
+            username: currentUser.username || "usuario",
+            bio: currentUser.bio || "Sin biografia por ahora.",
+            role: currentUser.role || "user",
+            profile_visibility: currentUser.profileVisibility || "public",
+            email_visibility: currentUser.emailVisibility || "private",
+            comment_permissions: currentUser.commentPermissions || "registered",
+            sensitive_filter: currentUser.sensitiveFilter ?? true,
+            profile_image: profileImage
+          };
+
+          const fallback = await withTimeout(
+            upsertProfileFullViaRest(fullPayload, "Guardar foto de perfil"),
+            10000,
+            "Guardar foto de perfil"
+          );
+
+          if (fallback.error) {
+            profileSettingsMessage = fallback.error.message || error.message || "No pudimos actualizar tu foto de perfil.";
+            return;
+          }
         }
 
         users = users.map((user) =>
