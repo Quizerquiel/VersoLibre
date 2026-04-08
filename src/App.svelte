@@ -765,10 +765,6 @@
 
   async function saveProfileSettings(event) {
     event.preventDefault();
-    console.log("[saveProfileSettings] submit fired", {
-      hasCurrentUser: Boolean(currentUser),
-      hasSupabase: Boolean(supabase)
-    });
     if (!currentUser || !supabase) return;
     profileSettingsMessage = "";
 
@@ -776,20 +772,13 @@
       const trimmedName = (settingsName || currentUser.name || "").trim();
       const trimmedUsername = (settingsUsername || currentUser.username || "").trim().toLowerCase();
       const trimmedBio = settingsBio.trim();
-      console.log("[saveProfileSettings] normalized input", {
-        trimmedName,
-        trimmedUsername,
-        bioLength: trimmedBio.length
-      });
 
       if (trimmedName.length < 3) {
-        console.log("[saveProfileSettings] blocked by name validation");
         profileSettingsMessage = "El nombre visible debe tener al menos 3 caracteres.";
         return;
       }
 
       if (trimmedUsername.length < 3 || /\s/.test(trimmedUsername)) {
-        console.log("[saveProfileSettings] blocked by username validation");
         profileSettingsMessage = "El usuario debe tener al menos 3 caracteres y sin espacios.";
         return;
       }
@@ -799,7 +788,6 @@
       );
 
       if (usernameInUse) {
-        console.log("[saveProfileSettings] blocked by username collision", { trimmedUsername });
         profileSettingsMessage = "Ese nombre de usuario ya esta en uso.";
         return;
       }
@@ -823,11 +811,6 @@
         10000,
         "Guardar perfil"
       );
-
-      console.log("[saveProfileSettings] upsert finished", {
-        hasError: Boolean(error),
-        errorMessage: error?.message || null
-      });
 
       if (error) {
         profileSettingsMessage = error.message || "No se pudo guardar la configuracion.";
@@ -876,13 +859,11 @@
       );
 
       profileSettingsMessage = "Perfil guardado.";
-      console.log("[saveProfileSettings] success");
       flash("Tu cuenta se actualizo correctamente.");
 
       // Refresh in background; don't fail UX if sync takes too long.
       refreshData().catch(() => {});
     } catch (error) {
-      console.log("[saveProfileSettings] exception", error);
       profileSettingsMessage = error?.message || "No se pudo guardar la configuracion.";
     }
   }
@@ -996,21 +977,42 @@
 
     const reader = new FileReader();
     reader.onload = async () => {
-      const profileImage = String(reader.result || "");
-      const { error } = await supabase
-        .from("profiles")
-        .update({ profile_image: profileImage })
-        .eq("id", currentUser.id);
-      if (error) {
-        profileSettingsMessage = "No pudimos actualizar tu foto de perfil.";
-        return;
-      }
+      try {
+        const profileImage = String(reader.result || "");
+        const profilePayload = {
+          id: currentUser.id,
+          email: currentUser.email || authUser?.email || "",
+          name: currentUser.name || authUser?.user_metadata?.name || "Autor",
+          username: currentUser.username || "usuario",
+          bio: currentUser.bio || "Sin biografia por ahora.",
+          role: currentUser.role || "user",
+          email_visibility: currentUser.emailVisibility || "private",
+          profile_visibility: currentUser.profileVisibility || "public",
+          comment_permissions: currentUser.commentPermissions || "registered",
+          sensitive_filter: currentUser.sensitiveFilter ?? true,
+          profile_image: profileImage
+        };
 
-      users = users.map((user) =>
-        user.id === currentUser.id ? { ...user, profileImage } : user
-      );
-      profileSettingsMessage = "Foto de perfil actualizada.";
-      flash("Tu foto de perfil se actualizo.");
+        const { error } = await withTimeout(
+          upsertProfileViaRest(profilePayload, "Guardar foto de perfil"),
+          10000,
+          "Guardar foto de perfil"
+        );
+
+        if (error) {
+          profileSettingsMessage = error.message || "No pudimos actualizar tu foto de perfil.";
+          return;
+        }
+
+        users = users.map((user) =>
+          user.id === currentUser.id ? { ...user, profileImage } : user
+        );
+        profileSettingsMessage = "Foto de perfil actualizada.";
+        flash("Tu foto de perfil se actualizo.");
+        refreshData().catch(() => {});
+      } catch (error) {
+        profileSettingsMessage = error?.message || "No pudimos actualizar tu foto de perfil.";
+      }
     };
     reader.readAsDataURL(file);
 
