@@ -32,6 +32,7 @@
   let sessionUserId = "";
   let authReady = false;
   let feedDataLoaded = false;
+  let homeDataLoaded = false;
   let currentPath = typeof window !== "undefined" ? window.location.pathname.replace(/\/+$/, "") || "/" : "/";
   let visibleCount = FEED_BATCH;
   let searchQuery = "";
@@ -153,6 +154,7 @@
   async function refreshData() {
     if (!isSupabaseConfigured || !supabase) {
       feedDataLoaded = true;
+      homeDataLoaded = true;
       return;
     }
 
@@ -200,6 +202,7 @@
       }
     } finally {
       feedDataLoaded = true;
+      homeDataLoaded = true;
     }
   }
 
@@ -208,6 +211,7 @@
       announcement = "Configura Supabase para activar autenticacion y base de datos real.";
       authReady = true;
       feedDataLoaded = true;
+      homeDataLoaded = true;
       return;
     }
 
@@ -1022,46 +1026,71 @@
     profilePhotoInput?.click();
   }
 
+  function resizeImage(file, maxSize) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const ratio = Math.min(maxSize / img.width, maxSize / img.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.85);
+      };
+      img.src = url;
+    });
+  }
+
   async function handleProfilePhotoChange(event) {
     const file = event.currentTarget?.files?.[0];
     if (!file || !currentUser || !supabase) return;
 
     if (!file.type.startsWith("image/")) {
       profileSettingsMessage = "Selecciona una imagen valida para la foto de perfil.";
+      event.currentTarget.value = "";
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const profileImage = String(reader.result || "");
-        const { error } = await withLockRetry(
-          () => updateCurrentProfileViaRpc(
-            { p_profile_image: profileImage },
-            "Guardar foto de perfil"
-          ),
-          4,
-          240
-        );
-
-        if (error) {
-          profileSettingsMessage = error.message || "No pudimos actualizar tu foto de perfil.";
-          return;
-        }
-
-        users = users.map((user) =>
-          user.id === currentUser.id ? { ...user, profileImage } : user
-        );
-        profileSettingsMessage = "Foto de perfil actualizada.";
-        flash("Tu foto de perfil se actualizo.");
-        refreshData().catch(() => {});
-      } catch (error) {
-        profileSettingsMessage = error?.message || "No pudimos actualizar tu foto de perfil.";
-      }
-    };
-    reader.readAsDataURL(file);
+    if (file.size > 5 * 1024 * 1024) {
+      profileSettingsMessage = "La imagen no puede superar 5 MB.";
+      event.currentTarget.value = "";
+      return;
+    }
 
     event.currentTarget.value = "";
+
+    try {
+      const resized = await resizeImage(file, 500);
+      const path = `${currentUser.id}/avatar.jpg`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, resized, { upsert: true, contentType: "image/jpeg" });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(path);
+
+      const profileImage = `${publicUrl}?t=${Date.now()}`;
+
+      const { error } = await withLockRetry(
+        () => updateCurrentProfileViaRpc({ p_profile_image: profileImage }, "Guardar foto de perfil"),
+        4,
+        240
+      );
+      if (error) throw error;
+
+      users = users.map((u) => u.id === currentUser.id ? { ...u, profileImage } : u);
+      profileSettingsMessage = "Foto de perfil actualizada.";
+      flash("Tu foto de perfil se actualizo.");
+      refreshData().catch(() => {});
+    } catch (err) {
+      profileSettingsMessage = err?.message || "No pudimos actualizar tu foto de perfil.";
+    }
   }
 
   function handleScroll() {
@@ -1355,26 +1384,34 @@
             </div>
 
             <aside class="hero-side" aria-label="Resumen rapido">
-              <div class="hero-feature">
-                <p class="hero-side-kicker">Poema destacado</p>
-                {#if featuredPoem}
-                  <h3>{featuredPoem.title}</h3>
-                  <p class="hero-side-copy">{truncate(toPreviewText(featuredPoem.content), 140)}</p>
-                  <div class="hero-feature-meta">
-                    <span>Por {featuredPoem.author}</span>
-                    <span>{featuredPoem.category}</span>
-                  </div>
-                {/if}
-              </div>
-              <div class="quick-stats side-stats">
-                <article><strong>{totalPoems}</strong><span>poemas</span></article>
-                <article><strong>{totalAuthors}</strong><span>autores</span></article>
-                <article><strong>{totalCategories}</strong><span>temas</span></article>
-              </div>
-              <div class="hero-actions side-actions">
-                <a href="/poemas" class="primary-btn" on:click|preventDefault={() => navigate("/poemas")}>Explorar feed</a>
-                <a href="/publicar" class="secondary-btn" on:click|preventDefault={() => navigate("/publicar")}>Publicar poema</a>
-              </div>
+              {#if !homeDataLoaded}
+                <div class="gate-panel feed-loading-panel home-loading-panel" role="status" aria-live="polite">
+                  <span class="loading-spinner" aria-hidden="true"></span>
+                  <h3>Cargando comunidad...</h3>
+                  <p>Estamos recuperando poemas, autores y categorias.</p>
+                </div>
+              {:else}
+                <div class="hero-feature">
+                  <p class="hero-side-kicker">Poema destacado</p>
+                  {#if featuredPoem}
+                    <h3>{featuredPoem.title}</h3>
+                    <p class="hero-side-copy">{truncate(toPreviewText(featuredPoem.content), 140)}</p>
+                    <div class="hero-feature-meta">
+                      <span>Por {featuredPoem.author}</span>
+                      <span>{featuredPoem.category}</span>
+                    </div>
+                  {/if}
+                </div>
+                <div class="quick-stats side-stats">
+                  <article><strong>{totalPoems}</strong><span>poemas</span></article>
+                  <article><strong>{totalAuthors}</strong><span>autores</span></article>
+                  <article><strong>{totalCategories}</strong><span>temas</span></article>
+                </div>
+                <div class="hero-actions side-actions">
+                  <a href="/poemas" class="primary-btn" on:click|preventDefault={() => navigate("/poemas")}>Explorar feed</a>
+                  <a href="/publicar" class="secondary-btn" on:click|preventDefault={() => navigate("/publicar")}>Publicar poema</a>
+                </div>
+              {/if}
             </aside>
           </div>
         </div>

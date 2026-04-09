@@ -1036,6 +1036,12 @@ textarea {
   gap: 0.45rem;
 }
 
+.home-loading-panel {
+  margin-top: 0;
+  min-height: 280px;
+  align-content: center;
+}
+
 .loading-spinner {
   width: 2rem;
   height: 2rem;
