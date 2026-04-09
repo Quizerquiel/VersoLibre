@@ -1193,9 +1193,9 @@
       ? {
           id: (authSession?.user || authUser).id,
           email: (authSession?.user || authUser).email || "",
-          name: (authSession?.user || authUser).user_metadata?.name || (authSession?.user || authUser).email?.split("@")[0] || "Autor",
+          name: (authSession?.user || authUser).user_metadata?.name || "Autor",
           username:
-            String((authSession?.user || authUser).user_metadata?.username || (authSession?.user || authUser).email?.split("@")[0] || "usuario")
+            String((authSession?.user || authUser).user_metadata?.username || "")
               .toLowerCase()
               .replace(/[^a-z0-9._-]/g, "")
               .slice(0, 24) || "usuario",
