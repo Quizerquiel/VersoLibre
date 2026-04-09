@@ -159,10 +159,12 @@
     }
 
     try {
-      const profilesRes = await fetchProfilesNoCache();
-      const poemsRes = await supabase.from("poems").select("*").order("created_at", { ascending: false });
-      const reactionsRes = await supabase.from("reactions").select("*");
-      const commentsRes = await supabase.from("comments").select("*").order("created_at", { ascending: false });
+      const [profilesRes, poemsRes, reactionsRes, commentsRes] = await Promise.all([
+        fetchProfilesNoCache(),
+        supabase.from("poems").select("id,owner_id,author_name,title,category_id,category_label,content,status,created_at").order("created_at", { ascending: false }),
+        supabase.from("reactions").select("poem_id,user_id,value"),
+        supabase.from("comments").select("id,poem_id,user_id,author_name,content,created_at").order("created_at", { ascending: false })
+      ]);
 
       if (profilesRes.error) {
         flash("No pudimos cargar perfiles desde Supabase.");
@@ -255,7 +257,11 @@
     const targetPath = nextPath === "/404" ? "/" : nextPath;
 
     if (typeof window !== "undefined") {
-      window.location.assign(targetPath);
+      window.history.pushState({}, "", targetPath);
+      currentPath = targetPath;
+      visibleCount = FEED_BATCH;
+      window.scrollTo(0, 0);
+      mobileMenuOpen = false;
       return;
     }
 
@@ -268,12 +274,14 @@
       navigate("/perfil");
       return;
     }
+    viewedProfileId = userId;
     if (typeof window !== "undefined") {
-      window.location.assign(`/autor?u=${encodeURIComponent(userId)}`);
+      window.history.pushState({}, "", `/autor?u=${encodeURIComponent(userId)}`);
+      currentPath = "/autor";
+      window.scrollTo(0, 0);
+      mobileMenuOpen = false;
       return;
     }
-
-    viewedProfileId = userId;
     currentPath = "/autor";
   }
 
@@ -421,7 +429,7 @@
         .from("profiles")
         .update(updates)
         .eq("id", userId)
-        .select("*")
+        .select("id,email,name,username,bio,role,profile_visibility,email_visibility,comment_permissions,sensitive_filter,profile_image,created_at")
         .single();
 
       if (error) {
@@ -451,7 +459,7 @@
       return { data: null, error: new Error("Falta configurar Supabase en Vercel.") };
     }
 
-    const { data, error } = await supabase.from("profiles").select("*");
+    const { data, error } = await supabase.from("profiles").select("id,email,name,username,bio,role,profile_visibility,email_visibility,comment_permissions,sensitive_filter,profile_image,created_at");
     return { data: data || [], error };
   }
 
