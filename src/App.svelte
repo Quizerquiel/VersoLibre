@@ -225,18 +225,15 @@
   }
 
   function navigate(path) {
-    currentPath = normalizePath(path);
-    visibleCount = FEED_BATCH;
-    searchQuery = "";
-    selectedCategory = "all";
-    categorySearch = "";
-    mobileMenuOpen = false;
-    closePoem();
-    if (currentPath !== "/autor") {
-      viewedProfileId = "";
+    const nextPath = normalizePath(path);
+    const targetPath = nextPath === "/404" ? "/" : nextPath;
+
+    if (typeof window !== "undefined") {
+      window.location.assign(targetPath);
+      return;
     }
-    window.history.pushState({}, "", currentPath === "/404" ? "/" : currentPath);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    currentPath = targetPath;
   }
 
   function openAuthorProfile(userId) {
@@ -245,16 +242,13 @@
       navigate("/perfil");
       return;
     }
+    if (typeof window !== "undefined") {
+      window.location.assign(`/autor?u=${encodeURIComponent(userId)}`);
+      return;
+    }
+
     viewedProfileId = userId;
     currentPath = "/autor";
-    visibleCount = FEED_BATCH;
-    searchQuery = "";
-    selectedCategory = "all";
-    categorySearch = "";
-    mobileMenuOpen = false;
-    closePoem();
-    window.history.pushState({}, "", `/autor?u=${encodeURIComponent(userId)}`);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function flash(message) {
