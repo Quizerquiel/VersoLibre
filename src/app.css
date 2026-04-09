@@ -1345,7 +1345,6 @@ textarea {
 }
 
 @media (max-width: 1024px) {
-  .site-header,
   .hero-panel,
   .hero-main,
   .auth-layout,
@@ -1371,15 +1370,16 @@ textarea {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .profile-shell {
-    flex-direction: column;
-  }
 }
 
 @media (max-width: 780px) {
   .site-header {
     grid-template-columns: auto 1fr auto;
     align-items: center;
+  }
+
+  .profile-shell {
+    flex-direction: column;
   }
 
   .brand > div,
