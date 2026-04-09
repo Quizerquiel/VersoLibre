@@ -214,11 +214,6 @@
     return routes.has(clean) ? clean : "/404";
   }
 
-  function getRoutePath() {
-    if (typeof window === "undefined") return currentPath;
-    return normalizePath(window.location.pathname);
-  }
-
   function syncCurrentPathFromLocation() {
     if (typeof window === "undefined") return;
     currentPath = normalizePath(window.location.pathname);
@@ -1093,13 +1088,6 @@
           joinedAt: authUser.created_at || new Date().toISOString()
         }
       : null);
-  $: if (typeof window !== "undefined") {
-    const livePath = normalizePath(window.location.pathname);
-    routePath = livePath;
-    if (currentPath !== livePath) {
-      currentPath = livePath;
-    }
-  }
   $: featuredPoem = poems.find((poem) => poem.status === "published") || null;
   $: moderationPoems = currentUser?.role === "admin" ? poems : [];
   $: visibleCategoryOptions = CATEGORY_OPTIONS.filter((option) => {
@@ -1199,13 +1187,13 @@
     <p class="mobile-brand-title">VersoLibre</p>
 
     <nav class="main-nav" aria-label="Principal">
-      <a href="/" class:active={getRoutePath() === "/"} on:click|preventDefault={() => navigate("/")}>Inicio</a>
+      <a href="/" class:active={currentPath === "/"} on:click|preventDefault={() => navigate("/")}>Inicio</a>
       {#if currentUser}
-        <a href="/poemas" class:active={getRoutePath() === "/poemas"} on:click|preventDefault={() => navigate("/poemas")}>Feed</a>
-        <a href="/publicar" class:active={getRoutePath() === "/publicar"} on:click|preventDefault={() => navigate("/publicar")}>Publicar</a>
-        <a href="/perfil" class:active={getRoutePath() === "/perfil"} on:click|preventDefault={() => navigate("/perfil")}>Perfil</a>
+        <a href="/poemas" class:active={currentPath === "/poemas"} on:click|preventDefault={() => navigate("/poemas")}>Feed</a>
+        <a href="/publicar" class:active={currentPath === "/publicar"} on:click|preventDefault={() => navigate("/publicar")}>Publicar</a>
+        <a href="/perfil" class:active={currentPath === "/perfil"} on:click|preventDefault={() => navigate("/perfil")}>Perfil</a>
         {#if currentUser.role === "admin"}
-          <a href="/admin" class:active={getRoutePath() === "/admin"} on:click|preventDefault={() => navigate("/admin")}>Admin</a>
+          <a href="/admin" class:active={currentPath === "/admin"} on:click|preventDefault={() => navigate("/admin")}>Admin</a>
         {/if}
       {/if}
     </nav>
@@ -1238,13 +1226,13 @@
 
   {#if mobileMenuOpen && currentUser}
     <nav class="mobile-nav-panel" aria-label="Menú móvil">
-      <a href="/" class:active={getRoutePath() === "/"} on:click|preventDefault={() => navigate("/")}>Inicio</a>
-      <a href="/poemas" class:active={getRoutePath() === "/poemas"} on:click|preventDefault={() => navigate("/poemas")}>Feed</a>
-      <a href="/publicar" class:active={getRoutePath() === "/publicar"} on:click|preventDefault={() => navigate("/publicar")}>Publicar</a>
-      <a href="/perfil" class:active={getRoutePath() === "/perfil"} on:click|preventDefault={() => navigate("/perfil")}>Perfil</a>
-      <a href="/configuracion" class:active={getRoutePath() === "/configuracion"} on:click|preventDefault={() => navigate("/configuracion")}>Configuración</a>
+      <a href="/" class:active={currentPath === "/"} on:click|preventDefault={() => navigate("/")}>Inicio</a>
+      <a href="/poemas" class:active={currentPath === "/poemas"} on:click|preventDefault={() => navigate("/poemas")}>Feed</a>
+      <a href="/publicar" class:active={currentPath === "/publicar"} on:click|preventDefault={() => navigate("/publicar")}>Publicar</a>
+      <a href="/perfil" class:active={currentPath === "/perfil"} on:click|preventDefault={() => navigate("/perfil")}>Perfil</a>
+      <a href="/configuracion" class:active={currentPath === "/configuracion"} on:click|preventDefault={() => navigate("/configuracion")}>Configuración</a>
       {#if currentUser.role === "admin"}
-        <a href="/admin" class:active={getRoutePath() === "/admin"} on:click|preventDefault={() => navigate("/admin")}>Admin</a>
+        <a href="/admin" class:active={currentPath === "/admin"} on:click|preventDefault={() => navigate("/admin")}>Admin</a>
       {/if}
     </nav>
   {/if}
@@ -1254,7 +1242,7 @@
   {/if}
 
   <main id="main-content">
-    {#if getRoutePath() === "/"}
+    {#if currentPath === "/"}
       <section class="hero-panel">
         <div class="hero-copy">
           <p class="badge">Feed literario continuo</p>
@@ -1329,7 +1317,7 @@
           <a href="https://www.linkedin.com/in/ezequielpadilla09/" target="_blank" rel="noreferrer">LinkedIn</a>
         </div>
       </footer>
-    {:else if getRoutePath() === "/poemas"}
+    {:else if currentPath === "/poemas"}
       <section class="feed-shell">
         <div class="section-title">
           <div>
@@ -1433,7 +1421,7 @@
           </div>
         {/if}
       </section>
-    {:else if getRoutePath() === "/publicar"}
+    {:else if currentPath === "/publicar"}
       <section class="page-card">
         <div class="section-title">
           <div>
@@ -1500,7 +1488,7 @@
           </div>
         {/if}
       </section>
-    {:else if getRoutePath() === "/login"}
+    {:else if currentPath === "/login"}
       <section class="auth-layout login-only">
         <article class="auth-card">
           <p class="eyebrow">Acceso</p>
@@ -1534,7 +1522,7 @@
           </p>
         </article>
       </section>
-    {:else if getRoutePath() === "/reset-password"}
+    {:else if currentPath === "/reset-password"}
       <section class="auth-layout login-only">
         <article class="auth-card">
           <p class="eyebrow">Recuperación</p>
@@ -1559,7 +1547,7 @@
           </p>
         </article>
       </section>
-    {:else if getRoutePath() === "/registro"}
+    {:else if currentPath === "/registro"}
       <section class="auth-layout login-only">
         <article class="auth-card">
           <p class="eyebrow">Registro</p>
@@ -1596,7 +1584,7 @@
           </p>
         </article>
       </section>
-    {:else if getRoutePath() === "/perfil"}
+    {:else if currentPath === "/perfil"}
       <section class="profile-shell">
         {#if currentUser}
           <aside class="profile-card">
@@ -1683,7 +1671,7 @@
           </div>
         {/if}
       </section>
-    {:else if getRoutePath() === "/autor"}
+    {:else if currentPath === "/autor"}
       <section class="profile-shell">
         {#if viewedProfile}
           <aside class="profile-card">
@@ -1766,7 +1754,7 @@
           </div>
         {/if}
       </section>
-    {:else if getRoutePath() === "/configuracion"}
+    {:else if currentPath === "/configuracion"}
       <section class="page-card">
         {#if currentUser}
           <section class="settings-panel standalone-settings">
@@ -1867,7 +1855,7 @@
           </div>
         {/if}
       </section>
-    {:else if getRoutePath() === "/admin"}
+    {:else if currentPath === "/admin"}
       <section class="page-card">
         {#if currentUser?.role === "admin"}
           <div class="admin-panel">
