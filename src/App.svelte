@@ -201,6 +201,11 @@
       authSession = session || null;
       authUser = session?.user || null;
       sessionUserId = authUser?.id || "";
+      if (!authUser) {
+        const { data: userData } = await supabase.auth.getUser();
+        authUser = userData?.user || null;
+        sessionUserId = authUser?.id || sessionUserId;
+      }
       if (authUser) {
         void ensureProfile(authUser);
       }
@@ -1024,6 +1029,12 @@
         authUser = nextUser;
         sessionUserId = nextUser?.id || "";
 
+        if (!nextUser && event !== "SIGNED_OUT") {
+          const { data: userData } = await supabase.auth.getUser();
+          authUser = userData?.user || authUser;
+          sessionUserId = authUser?.id || sessionUserId;
+        }
+
         if (event === "PASSWORD_RECOVERY") {
           currentPath = "/reset-password";
           window.history.replaceState({}, "", "/reset-password");
@@ -1068,24 +1079,24 @@
 
   $: currentUser =
     users.find((user) => user.id === sessionUserId) ||
-    (authUser
+    (authSession?.user || authUser
       ? {
-          id: authUser.id,
-          email: authUser.email || "",
-          name: authUser.user_metadata?.name || authUser.email?.split("@")[0] || "Autor",
+          id: (authSession?.user || authUser).id,
+          email: (authSession?.user || authUser).email || "",
+          name: (authSession?.user || authUser).user_metadata?.name || (authSession?.user || authUser).email?.split("@")[0] || "Autor",
           username:
-            String(authUser.user_metadata?.username || authUser.email?.split("@")[0] || "usuario")
+            String((authSession?.user || authUser).user_metadata?.username || (authSession?.user || authUser).email?.split("@")[0] || "usuario")
               .toLowerCase()
               .replace(/[^a-z0-9._-]/g, "")
               .slice(0, 24) || "usuario",
-          bio: authUser.user_metadata?.bio || "Sin biografia por ahora.",
-          role: authUser.email?.toLowerCase() === ADMIN_EMAIL ? "admin" : "user",
+          bio: (authSession?.user || authUser).user_metadata?.bio || "Sin biografia por ahora.",
+          role: (authSession?.user || authUser).email?.toLowerCase() === ADMIN_EMAIL ? "admin" : "user",
           profileVisibility: "public",
           emailVisibility: "private",
           commentPermissions: "registered",
           sensitiveFilter: true,
           profileImage: "",
-          joinedAt: authUser.created_at || new Date().toISOString()
+          joinedAt: (authSession?.user || authUser).created_at || new Date().toISOString()
         }
       : null);
   $: featuredPoem = poems.find((poem) => poem.status === "published") || null;
