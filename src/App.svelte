@@ -31,6 +31,7 @@
   let authSession = null;
   let sessionUserId = "";
   let authReady = false;
+  let feedDataLoaded = false;
   let currentPath = typeof window !== "undefined" ? window.location.pathname.replace(/\/+$/, "") || "/" : "/";
   let visibleCount = FEED_BATCH;
   let searchQuery = "";
@@ -150,48 +151,55 @@
   }
 
   async function refreshData() {
-    if (!isSupabaseConfigured || !supabase) return;
-
-    const profilesRes = await fetchProfilesNoCache();
-    const poemsRes = await supabase.from("poems").select("*").order("created_at", { ascending: false });
-    const reactionsRes = await supabase.from("reactions").select("*");
-    const commentsRes = await supabase.from("comments").select("*").order("created_at", { ascending: false });
-
-    if (profilesRes.error) {
-      flash("No pudimos cargar perfiles desde Supabase.");
-    } else {
-      users = (profilesRes.data || []).map(mapProfile);
+    if (!isSupabaseConfigured || !supabase) {
+      feedDataLoaded = true;
+      return;
     }
 
-    const profileById = new Map(users.map((user) => [user.id, user]));
+    try {
+      const profilesRes = await fetchProfilesNoCache();
+      const poemsRes = await supabase.from("poems").select("*").order("created_at", { ascending: false });
+      const reactionsRes = await supabase.from("reactions").select("*");
+      const commentsRes = await supabase.from("comments").select("*").order("created_at", { ascending: false });
 
-    if (poemsRes.error) {
-      flash("No pudimos cargar poemas desde Supabase.");
-    } else {
-      poems = (poemsRes.data || []).map((row) => mapPoem(row, profileById));
-    }
+      if (profilesRes.error) {
+        flash("No pudimos cargar perfiles desde Supabase.");
+      } else {
+        users = (profilesRes.data || []).map(mapProfile);
+      }
 
-    if (reactionsRes.error) {
-      flash("No pudimos cargar reacciones desde Supabase.");
-    } else {
-      reactions = (reactionsRes.data || []).map((row) => ({
-        poemId: row.poem_id,
-        userId: row.user_id,
-        value: row.value
-      }));
-    }
+      const profileById = new Map(users.map((user) => [user.id, user]));
 
-    if (commentsRes.error) {
-      flash("No pudimos cargar comentarios desde Supabase.");
-    } else {
-      comments = (commentsRes.data || []).map((row) => ({
-        id: row.id,
-        poemId: row.poem_id,
-        userId: row.user_id,
-        author: row.author_name || profileById.get(row.user_id)?.name || "Autor",
-        content: row.content,
-        createdAt: row.created_at
-      }));
+      if (poemsRes.error) {
+        flash("No pudimos cargar poemas desde Supabase.");
+      } else {
+        poems = (poemsRes.data || []).map((row) => mapPoem(row, profileById));
+      }
+
+      if (reactionsRes.error) {
+        flash("No pudimos cargar reacciones desde Supabase.");
+      } else {
+        reactions = (reactionsRes.data || []).map((row) => ({
+          poemId: row.poem_id,
+          userId: row.user_id,
+          value: row.value
+        }));
+      }
+
+      if (commentsRes.error) {
+        flash("No pudimos cargar comentarios desde Supabase.");
+      } else {
+        comments = (commentsRes.data || []).map((row) => ({
+          id: row.id,
+          poemId: row.poem_id,
+          userId: row.user_id,
+          author: row.author_name || profileById.get(row.user_id)?.name || "Autor",
+          content: row.content,
+          createdAt: row.created_at
+        }));
+      }
+    } finally {
+      feedDataLoaded = true;
     }
   }
 
@@ -199,6 +207,7 @@
     if (!isSupabaseConfigured || !supabase) {
       announcement = "Configura Supabase para activar autenticacion y base de datos real.";
       authReady = true;
+      feedDataLoaded = true;
       return;
     }
 
@@ -1438,12 +1447,19 @@
           </label>
         </div>
 
-        <p class="feed-counter" aria-live="polite">Mostrando {visiblePoems.length} de {filteredPoems.length} poemas</p>
+        {#if !feedDataLoaded}
+          <div class="gate-panel feed-loading-panel" role="status" aria-live="polite">
+            <span class="loading-spinner" aria-hidden="true"></span>
+            <h3>Cargando poemas...</h3>
+            <p>Estamos trayendo las publicaciones de la comunidad.</p>
+          </div>
+        {:else}
+          <p class="feed-counter" aria-live="polite">Mostrando {visiblePoems.length} de {filteredPoems.length} poemas</p>
 
-        {#if visiblePoems.length}
-          <div class="feed-list">
-            {#each visiblePoems as poem (poem.id)}
-              <article class="feed-card">
+          {#if visiblePoems.length}
+            <div class="feed-list">
+              {#each visiblePoems as poem (poem.id)}
+                <article class="feed-card">
                 <div class="feed-card-top">
                   <button class="user-chip author-link-btn" type="button" on:click={() => openAuthorProfile(poem.ownerId)}>
                     <span class="user-avatar">{initials(poem.author)}</span>
@@ -1494,22 +1510,23 @@
                     <button class="danger-btn compact-btn" type="button" on:click={() => deletePoem(poem.id)}>Eliminar</button>
                   </div>
                 {/if}
-              </article>
-            {/each}
-          </div>
+                </article>
+              {/each}
+            </div>
 
-          <div class:done={visiblePoems.length >= filteredPoems.length} class="load-hint">
-            {#if visiblePoems.length < filteredPoems.length}
-              Sigue bajando para cargar mas poemas.
-            {:else}
-              Has llegado al final por ahora.
-            {/if}
-          </div>
-        {:else}
-          <div class="empty-panel">
-            <h3>No encontramos poemas con ese filtro.</h3>
-            <p>Prueba otra busqueda o limpia el tema seleccionado.</p>
-          </div>
+            <div class:done={visiblePoems.length >= filteredPoems.length} class="load-hint">
+              {#if visiblePoems.length < filteredPoems.length}
+                Sigue bajando para cargar mas poemas.
+              {:else}
+                Has llegado al final por ahora.
+              {/if}
+            </div>
+          {:else}
+            <div class="empty-panel">
+              <h3>No encontramos poemas con ese filtro.</h3>
+              <p>Prueba otra busqueda o limpia el tema seleccionado.</p>
+            </div>
+          {/if}
         {/if}
       </section>
     {:else if currentPath === "/publicar"}

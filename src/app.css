@@ -1028,6 +1028,29 @@ textarea {
   background: rgba(255, 252, 247, 0.88);
 }
 
+.feed-loading-panel {
+  margin-top: 1rem;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 0.45rem;
+}
+
+.loading-spinner {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 3px solid rgba(38, 23, 15, 0.18);
+  border-top-color: var(--accent);
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .profile-shell {
   gap: 1rem;
   align-items: start;
