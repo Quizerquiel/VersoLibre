@@ -1255,7 +1255,13 @@
           ≡
         </button>
         <button class="avatar-chip" type="button" on:click={() => navigate("/perfil")}>
-          <span>{initials(currentUser.name)}</span>
+          <span>
+            {#if currentUser.profileImage}
+              <img src={currentUser.profileImage} alt={`Foto de perfil de ${currentUser.name}`} class="avatar-chip-image" />
+            {:else}
+              {initials(currentUser.name)}
+            {/if}
+          </span>
           <small>
             @{currentUser.username}
             {#if currentUser.role === "admin"}
