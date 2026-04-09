@@ -306,6 +306,29 @@
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
+  function formatDate(dateString) {
+    return new Intl.DateTimeFormat("es-SV", { day: "numeric", month: "short", year: "numeric" }).format(new Date(dateString));
+  }
+
+  function formatRelative(dateString) {
+    const minutes = Math.max(1, Math.floor((Date.now() - new Date(dateString).getTime()) / 60000));
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} h`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days} d`;
+    return formatDate(dateString);
+  }
+
+  function truncate(text, size = 180) {
+    const str = String(text || "");
+    return str.length <= size ? str : `${str.slice(0, size).trim()}...`;
+  }
+
+  function toPreviewText(text) {
+    return String(text || "").replace(/\s+/g, " ").trim();
+  }
+
   function isTransientLockError(error) {
     const message = String(error?.message || "").toLowerCase();
     return message.includes("lock \"") || message.includes("another request stole it");
@@ -1599,7 +1622,7 @@
       </section>
     {:else if currentPath === "/perfil"}
       <section class="profile-shell">
-        {#if !authReady}
+        {#if !authReady && !currentUser}
           <div class="gate-panel">
             <h3>Cargando tu sesión...</h3>
             <p>Estamos restaurando tu acceso, un momento.</p>
@@ -1774,7 +1797,7 @@
       </section>
     {:else if currentPath === "/configuracion"}
       <section class="page-card">
-        {#if !authReady}
+        {#if !authReady && !currentUser}
           <div class="gate-panel">
             <h3>Cargando tu sesión...</h3>
             <p>Estamos restaurando tu acceso, un momento.</p>
