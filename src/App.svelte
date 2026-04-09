@@ -75,6 +75,7 @@
   let resetNewPassword = "";
   let resetConfirmPassword = "";
   let resetPasswordMessage = "";
+  let resetDone = false;
   let profilePhotoInput;
   let activePoemId = "";
   let activePoemComment = "";
@@ -596,7 +597,16 @@
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error || !data.user) {
-      loginMessage = error?.message || "No pudimos iniciar sesion.";
+      const msg = error?.message?.toLowerCase() || "";
+      if (msg.includes("invalid login credentials") || msg.includes("invalid credentials")) {
+        loginMessage = "Correo o contrasena incorrectos.";
+      } else if (msg.includes("email not confirmed")) {
+        loginMessage = "Debes confirmar tu correo primero. Revisa tu bandeja de entrada.";
+      } else if (msg.includes("too many requests") || msg.includes("rate limit")) {
+        loginMessage = "Demasiados intentos. Espera unos minutos.";
+      } else {
+        loginMessage = error?.message || "No pudimos iniciar sesion.";
+      }
       return;
     }
 
@@ -679,7 +689,7 @@
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/login`,
+        emailRedirectTo: `${window.location.origin}/perfil`,
         data: { name, username, bio }
       }
     });
@@ -768,9 +778,8 @@
     resetNewPassword = "";
     resetConfirmPassword = "";
     resetPasswordMessage = "";
-    loginMessage = "Contrasena actualizada. Ahora inicia sesion con tu nueva clave.";
     flash("Contrasena actualizada.");
-    navigate("/login");
+    resetDone = true;
   }
 
   async function handlePublish(event) {
@@ -1095,6 +1104,13 @@
           syncCurrentPathFromLocation();
         }
 
+        // If user becomes authenticated while on auth pages, go directly to profile.
+        if (nextUser && ["/login", "/registro"].includes(currentPath)) {
+          registerPending = false;
+          registerMessage = "";
+          navigate("/perfil");
+        }
+
         // Avoid writing profiles on every token refresh to prevent lock contention
         // while user saves settings.
         const shouldSyncProfile = ["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED"].includes(event);
@@ -1292,7 +1308,9 @@
           </small>
         </button>
       {:else}
-        <a href="/registro" class="primary-btn" on:click|preventDefault={() => navigate("/registro")}>Crear cuenta</a>
+        {#if currentPath !== "/registro"}
+          <a href="/registro" class="primary-btn" on:click|preventDefault={() => navigate("/registro")}>Crear cuenta</a>
+        {/if}
       {/if}
     </div>
   </header>
@@ -1569,11 +1587,11 @@
           <form class="stack-form" on:submit={handleLogin}>
             <label>
               <span>Correo</span>
-              <input bind:value={loginEmail} type="email" autocomplete="email" required />
+              <input bind:value={loginEmail} type="email" autocomplete="email" required on:input={() => { loginMessage = ""; }} />
             </label>
             <label>
               <span>Contrasena</span>
-              <input bind:value={loginPassword} type="password" autocomplete="current-password" required />
+              <input bind:value={loginPassword} type="password" autocomplete="current-password" required on:input={() => { loginMessage = ""; }} />
             </label>
             <div class="form-actions">
               <button class="primary-btn" type="submit">Entrar</button>
@@ -1598,26 +1616,35 @@
     {:else if currentPath === "/reset-password"}
       <section class="auth-layout login-only">
         <article class="auth-card">
-          <p class="eyebrow">Recuperación</p>
-          <h2>Nueva contraseña</h2>
-          <p class="section-copy">Abre el enlace del correo de recuperacion en este mismo navegador y define una clave nueva.</p>
-          <form class="stack-form" on:submit={handleResetPassword}>
-            <label>
-              <span>Nueva contraseña</span>
-              <input bind:value={resetNewPassword} type="password" maxlength="64" autocomplete="new-password" required />
-            </label>
-            <label>
-              <span>Confirmar nueva contraseña</span>
-              <input bind:value={resetConfirmPassword} type="password" maxlength="64" autocomplete="new-password" required />
-            </label>
-            <div class="form-actions">
-              <button class="primary-btn" type="submit">Actualizar contraseña</button>
-              <p class="form-note" aria-live="polite">{resetPasswordMessage}</p>
+          {#if resetDone}
+            <p class="eyebrow">Listo</p>
+            <h2>Contrasena actualizada</h2>
+            <p class="section-copy">Tu contrasena fue cambiada correctamente. Ya puedes iniciar sesion con tu nueva clave.</p>
+            <div class="hero-actions register-confirm-actions">
+              <a href="/login" class="primary-btn" on:click|preventDefault={() => navigate("/login")}>Iniciar sesion</a>
             </div>
-          </form>
-          <p class="login-inline-link">
-            <a href="/login" class="text-link" on:click|preventDefault={() => navigate("/login")}>Volver a iniciar sesión</a>
-          </p>
+          {:else}
+            <p class="eyebrow">Recuperación</p>
+            <h2>Nueva contraseña</h2>
+            <p class="section-copy">Abre el enlace del correo de recuperacion en este mismo navegador y define una clave nueva.</p>
+            <form class="stack-form" on:submit={handleResetPassword}>
+              <label>
+                <span>Nueva contraseña</span>
+                <input bind:value={resetNewPassword} type="password" maxlength="64" autocomplete="new-password" required />
+              </label>
+              <label>
+                <span>Confirmar nueva contraseña</span>
+                <input bind:value={resetConfirmPassword} type="password" maxlength="64" autocomplete="new-password" required />
+              </label>
+              <div class="form-actions">
+                <button class="primary-btn" type="submit">Actualizar contraseña</button>
+                <p class="form-note" aria-live="polite">{resetPasswordMessage}</p>
+              </div>
+            </form>
+            <p class="login-inline-link">
+              <a href="/login" class="text-link" on:click|preventDefault={() => navigate("/login")}>Volver a iniciar sesión</a>
+            </p>
+          {/if}
         </article>
       </section>
     {:else if currentPath === "/registro"}
@@ -1632,7 +1659,7 @@
               Si no aparece en bandeja principal, revisa la carpeta de spam.
             </p>
             <div class="hero-actions register-confirm-actions">
-              <a href="/login" class="primary-btn" on:click|preventDefault={() => navigate("/login")}>Ir a iniciar sesion</a>
+              <a href="/" class="primary-btn" on:click|preventDefault={() => navigate("/")}>Entendido</a>
             </div>
             <p class="login-inline-link">
               <button
