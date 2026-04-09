@@ -84,40 +84,39 @@ security definer
 set search_path = public
 as $$
 declare
-  base_name text;
+  base_name     text;
   base_username text;
+  final_username text;
 begin
-  base_name := coalesce(new.raw_user_meta_data ->> 'name', split_part(new.email, '@', 1), 'Autor');
-  base_username := public.safe_username(coalesce(new.raw_user_meta_data ->> 'username', base_name));
+  base_name     := coalesce(new.raw_user_meta_data ->> 'name', split_part(new.email, '@', 1), 'Autor');
+  base_username := left(public.safe_username(coalesce(new.raw_user_meta_data ->> 'username', base_name)), 24);
+
+  -- Use the exact username the user chose. Only fall back to UUID suffix if that
+  -- username is already taken (race condition between concurrent signups).
+  if exists (select 1 from public.profiles where username = base_username) then
+    final_username := left(base_username || right(new.id::text, 4), 24);
+  else
+    final_username := base_username;
+  end if;
 
   insert into public.profiles (
-    id,
-    email,
-    name,
-    username,
-    bio,
-    role,
-    profile_visibility,
-    email_visibility,
-    comment_permissions,
-    sensitive_filter,
-    profile_image
+    id, email, name, username, bio, role,
+    profile_visibility, email_visibility, comment_permissions, sensitive_filter, profile_image
   ) values (
     new.id,
     new.email,
     base_name,
-    left(base_username || right(new.id::text, 4), 24),
+    final_username,
     coalesce(new.raw_user_meta_data ->> 'bio', 'Nueva voz en VersoLibre.'),
     case when lower(new.email) = 'padillajosueezequiel@gmail.com' then 'admin' else 'user' end,
-    'public',
-    'private',
-    'registered',
-    true,
-    ''
+    'public', 'private', 'registered', true, ''
   )
   on conflict (id) do update
     set email = excluded.email,
-        role = case when lower(excluded.email) = 'padillajosueezequiel@gmail.com' then 'admin' else public.profiles.role end;
+        role  = case
+                  when lower(excluded.email) = 'padillajosueezequiel@gmail.com' then 'admin'
+                  else public.profiles.role
+                end;
 
   return new;
 end;

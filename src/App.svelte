@@ -48,6 +48,8 @@
   let registerPassword = "";
   let registerBio = "";
   let registerMessage = "";
+  let registerPending = false;
+  let registerConfirmedEmail = "";
 
   let poemTitle = "";
   let poemCategory = "";
@@ -119,8 +121,9 @@
     const email = authUser.email || "";
     const fallbackName = meta.name || email.split("@")[0] || "Autor";
     const rawUsername = (meta.username || fallbackName).toLowerCase().replace(/\s+/g, "");
-    const safeUsername = rawUsername.replace(/[^a-z0-9._-]/g, "").slice(0, 18) || "user";
-    const username = `${safeUsername}${String(authUser.id).slice(-4)}`.slice(0, 24);
+    // Use the username exactly as provided — no UUID suffix appended.
+    // The DB trigger handles uniqueness; this function is a fallback safety net.
+    const username = rawUsername.replace(/[^a-z0-9._-]/g, "").slice(0, 24) || "user";
 
     const { data: existing } = await supabase.from("profiles").select("id").eq("id", authUser.id).maybeSingle();
     if (!existing) {
@@ -642,66 +645,85 @@
       return;
     }
 
+    registerMessage = "";
     const name = registerName.trim();
     const username = registerUsername.trim().toLowerCase();
     const email = registerEmail.trim().toLowerCase();
     const password = registerPassword.trim();
     const bio = registerBio.trim() || "Nueva voz en VersoLibre.";
 
+    // --- Validaciones locales ---
     if (name.length < 3) return (registerMessage = "Tu nombre debe tener al menos 3 caracteres.");
     if (name.length > 60) return (registerMessage = "Tu nombre no puede superar 60 caracteres.");
-    if (username.length < 3 || /\s/.test(username)) return (registerMessage = "El usuario debe tener al menos 3 caracteres y sin espacios.");
+    if (username.length < 3) return (registerMessage = "El usuario debe tener al menos 3 caracteres.");
     if (username.length > 24) return (registerMessage = "El usuario no puede superar 24 caracteres.");
+    if (/\s/.test(username)) return (registerMessage = "El usuario no puede contener espacios.");
+    if (!/^[a-z0-9._-]+$/.test(username)) return (registerMessage = "El usuario solo puede contener letras, numeros, puntos, guiones y guiones bajos.");
     if (!validEmail(email)) return (registerMessage = "Ingresa un correo valido.");
     if (password.length < 6) return (registerMessage = "La contrasena debe tener al menos 6 caracteres.");
     if (password.length > 64) return (registerMessage = "La contrasena no puede superar 64 caracteres.");
 
-    const usernameInUse = users.some((user) => user.username.toLowerCase() === username);
-    if (usernameInUse) {
-      registerMessage = "Ese usuario ya existe.";
+    // --- Verificar disponibilidad del username en la BD (no solo en memoria) ---
+    const { data: takenUser } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("username", username)
+      .maybeSingle();
+    if (takenUser) {
+      registerMessage = "Ese nombre de usuario ya esta ocupado. Elige otro.";
       return;
     }
 
+    // --- Crear cuenta en Supabase Auth ---
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/login`,
-        data: {
-          name,
-          username,
-          bio
-        }
+        data: { name, username, bio }
       }
     });
 
     if (error) {
-      registerMessage = error.message || "No se pudo crear la cuenta.";
+      const msg = error.message?.toLowerCase() || "";
+      if (msg.includes("already registered") || msg.includes("user already registered")) {
+        registerMessage = "Este correo ya esta registrado. ¿Olvidaste tu contrasena?";
+      } else if (msg.includes("rate limit") || msg.includes("too many")) {
+        registerMessage = "Demasiados intentos. Espera unos minutos antes de volver a intentarlo.";
+      } else if (msg.includes("invalid email")) {
+        registerMessage = "El formato de correo no es valido.";
+      } else {
+        registerMessage = error.message || "No se pudo crear la cuenta. Intentalo de nuevo.";
+      }
       return;
     }
 
+    // Iniciar perfil y datos en segundo plano (no bloquear UX)
     if (data.user) {
-      await ensureProfile(data.user);
+      void ensureProfile(data.user);
     }
-    await refreshData();
+    void refreshData();
 
-    registerName = "";
-    registerUsername = "";
-    registerEmail = "";
-    registerPassword = "";
-    registerBio = "";
-
+    // Camino 1: Supabase devolvio sesion directa (confirmacion de email desactivada)
     if (data.session?.user?.id) {
-      sessionUserId = data.session.user.id;
-      registerMessage = "";
-      flash(`Cuenta creada para ${name}.`);
+      authSession = data.session;
+      authUser = data.user;
+      sessionUserId = data.user.id;
+      registerName = "";
+      registerUsername = "";
+      registerEmail = "";
+      registerPassword = "";
+      registerBio = "";
+      flash(`Bienvenido, ${name}.`);
       navigate("/perfil");
       return;
     }
 
-    registerMessage = "Cuenta creada. Revisa tu correo para verificarla y luego inicia sesion.";
+    // Camino 2: Supabase requiere verificacion por correo — quedarse en esta pagina
+    registerConfirmedEmail = email;
+    registerPassword = "";  // limpiar solo la contrasena por seguridad
+    registerPending = true;
     flash("Te enviamos un correo de verificacion.");
-    navigate("/login");
   }
 
   async function handleResetPassword(event) {
@@ -1601,38 +1623,60 @@
     {:else if currentPath === "/registro"}
       <section class="auth-layout login-only">
         <article class="auth-card">
-          <p class="eyebrow">Registro</p>
-          <h2>Crea tu perfil</h2>
-          <p class="section-copy">Tu perfil servira para firmar poemas y ordenar la comunidad.</p>
-          <form class="stack-form" on:submit={handleRegister}>
-            <label>
-              <span>Nombre visible</span>
-              <input bind:value={registerName} type="text" maxlength="60" required />
-            </label>
-            <label>
-              <span>Usuario</span>
-              <input bind:value={registerUsername} type="text" maxlength="24" required />
-            </label>
-            <label>
-              <span>Correo</span>
-              <input bind:value={registerEmail} type="email" maxlength="120" autocomplete="email" required />
-            </label>
-            <label>
-              <span>Contrasena</span>
-              <input bind:value={registerPassword} type="password" maxlength="64" autocomplete="new-password" required />
-            </label>
-            <label>
-              <span>Bio</span>
-              <textarea bind:value={registerBio} rows="4" maxlength="240" placeholder="Una pequena presentacion."></textarea>
-            </label>
-            <div class="form-actions">
-              <button class="primary-btn" type="submit">Crear cuenta</button>
-              <p class="form-note" aria-live="polite">{registerMessage}</p>
+          {#if registerPending}
+            <p class="eyebrow">Cuenta creada</p>
+            <h2>Revisa tu correo</h2>
+            <p class="section-copy">
+              Enviamos un enlace de verificacion a <strong>{registerConfirmedEmail}</strong>.
+              Abrir ese enlace activa tu cuenta; despues ya puedes iniciar sesion.
+              Si no aparece en bandeja principal, revisa la carpeta de spam.
+            </p>
+            <div class="hero-actions register-confirm-actions">
+              <a href="/login" class="primary-btn" on:click|preventDefault={() => navigate("/login")}>Ir a iniciar sesion</a>
             </div>
-          </form>
-          <p class="login-inline-link">
-            <a href="/login" class="text-link" on:click|preventDefault={() => navigate("/login")}>Ya tengo cuenta</a>
-          </p>
+            <p class="login-inline-link">
+              <button
+                type="button"
+                class="text-link"
+                on:click={() => { registerPending = false; registerMessage = ""; }}
+              >
+                No recibi el correo — volver al formulario
+              </button>
+            </p>
+          {:else}
+            <p class="eyebrow">Registro</p>
+            <h2>Crea tu perfil</h2>
+            <p class="section-copy">Tu perfil sirve para firmar poemas y ordenar la comunidad.</p>
+            <form class="stack-form" on:submit={handleRegister}>
+              <label>
+                <span>Nombre visible</span>
+                <input bind:value={registerName} type="text" maxlength="60" autocomplete="name" required />
+              </label>
+              <label>
+                <span>Usuario <small class="field-hint">(letras, numeros, puntos, guiones)</small></span>
+                <input bind:value={registerUsername} type="text" maxlength="24" autocomplete="username" spellcheck="false" required />
+              </label>
+              <label>
+                <span>Correo</span>
+                <input bind:value={registerEmail} type="email" maxlength="120" autocomplete="email" required />
+              </label>
+              <label>
+                <span>Contrasena</span>
+                <input bind:value={registerPassword} type="password" maxlength="64" autocomplete="new-password" required />
+              </label>
+              <label>
+                <span>Bio <small class="field-hint">(opcional)</small></span>
+                <textarea bind:value={registerBio} rows="3" maxlength="240" placeholder="Una pequena presentacion."></textarea>
+              </label>
+              <div class="form-actions">
+                <button class="primary-btn" type="submit">Crear cuenta</button>
+                <p class="form-note" aria-live="polite">{registerMessage}</p>
+              </div>
+            </form>
+            <p class="login-inline-link">
+              <a href="/login" class="text-link" on:click|preventDefault={() => navigate("/login")}>Ya tengo cuenta</a>
+            </p>
+          {/if}
         </article>
       </section>
     {:else if currentPath === "/perfil"}
