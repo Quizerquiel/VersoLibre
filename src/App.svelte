@@ -198,24 +198,29 @@
       return;
     }
 
+    // onAuthStateChange(INITIAL_SESSION) is the canonical path for session hydration
+    // and data loading. bootstrapState acts as a fallback safety net: it pre-populates
+    // auth state so currentUser resolves immediately on render, and sets authReady=true
+    // in case INITIAL_SESSION is delayed. It does NOT call refreshData() to avoid
+    // a double concurrent fetch against the one INITIAL_SESSION already triggers.
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      authSession = session || null;
-      authUser = session?.user || null;
-      sessionUserId = authUser?.id || "";
+      // Only populate if onAuthStateChange hasn't already done so
+      if (!authUser) {
+        authSession = session || null;
+        authUser = session?.user || null;
+        sessionUserId = authUser?.id || "";
+      }
       if (!authUser) {
         const { data: userData } = await supabase.auth.getUser();
-        authUser = userData?.user || null;
-        sessionUserId = authUser?.id || sessionUserId;
-      }
-      if (authUser) {
-        void ensureProfile(authUser);
+        if (!authUser) {
+          authUser = userData?.user || null;
+          sessionUserId = authUser?.id || sessionUserId;
+        }
       }
     } finally {
-      authReady = true;
+      if (!authReady) authReady = true;
     }
-
-    refreshData().catch(() => {});
   }
 
   function normalizePath(pathname) {
@@ -308,6 +313,10 @@
 
   function formatDate(dateString) {
     return new Intl.DateTimeFormat("es-SV", { day: "numeric", month: "short", year: "numeric" }).format(new Date(dateString));
+  }
+
+  function formatJoinDate(dateString) {
+    return new Intl.DateTimeFormat("es-SV", { month: "long", year: "numeric" }).format(new Date(dateString));
   }
 
   function formatRelative(dateString) {
