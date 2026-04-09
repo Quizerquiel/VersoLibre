@@ -634,7 +634,7 @@ a {
 }
 
 .feed-toolbar {
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: 1.4rem;
 }
 
@@ -992,6 +992,9 @@ textarea {
 
 .auth-layout.login-only {
   grid-template-columns: 1fr;
+  max-width: 540px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .side-panel {
@@ -1208,10 +1211,10 @@ textarea {
 
 .close-modal-icon {
   position: absolute;
-  top: 0.7rem;
-  right: 0.9rem;
-  width: 2rem;
-  height: 2rem;
+  top: 0.6rem;
+  right: 0.8rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.82);
@@ -1237,8 +1240,8 @@ textarea {
 }
 
 .modal-poem-body {
-  font-size: clamp(2rem, 2.6vw, 3rem);
-  line-height: 1.28;
+  font-size: clamp(1.4rem, 2.6vw, 2.8rem);
+  line-height: 1.32;
   color: var(--ink);
 }
 
@@ -1347,10 +1350,17 @@ textarea {
   .hero-main,
   .auth-layout,
   .quick-stats,
-  .settings-grid,
-  .preview-grid,
   .feed-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  /* tablet: 2 cols instead of jumping straight to 1 */
+  .preview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .feed-shell .feed-list {
@@ -1424,7 +1434,8 @@ textarea {
     padding: 0.9rem;
     border: 1px solid var(--line);
     border-radius: 20px;
-    background: rgba(255, 250, 244, 0.9);
+    background: rgba(255, 250, 244, 0.92);
+    backdrop-filter: blur(18px);
     box-shadow: var(--shadow-soft);
   }
 
@@ -1499,26 +1510,50 @@ textarea {
 }
 
 @media (max-width: 640px) {
+  /* --- Layout --- */
   .page-shell {
-    width: calc(100% - 0.6rem);
-    padding: 0.45rem 0 2rem;
+    width: calc(100% - 2rem);
+    padding: 0.5rem 0 2.5rem;
   }
 
+  /* --- Grids collapse to single column --- */
+  .preview-grid,
+  .settings-grid,
+  .feed-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  /* --- CTA areas stack and stretch --- */
   .hero-actions,
-  .form-actions {
+  .form-actions,
+  .side-actions {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .ghost-btn,
-  .primary-btn,
-  .secondary-btn {
+  /*
+   * Full-width buttons only in specific container contexts.
+   * Reaction buttons (.reaction-btn, .compact-btn) and header buttons
+   * are intentionally excluded so they stay inline.
+   */
+  .hero-actions > .primary-btn,
+  .hero-actions > .secondary-btn,
+  .hero-actions > .ghost-btn,
+  .form-actions > .primary-btn,
+  .form-actions > .secondary-btn,
+  .form-actions > .ghost-btn,
+  .side-actions > .primary-btn,
+  .side-actions > .secondary-btn,
+  .profile-actions > .primary-btn,
+  .profile-actions > .secondary-btn,
+  .profile-actions > .ghost-btn,
+  .profile-actions > a {
     width: 100%;
     justify-content: center;
   }
 
+  /* --- Header --- */
   .site-header {
-    grid-template-columns: auto 1fr auto;
     gap: 0.8rem;
     margin-bottom: 1rem;
     padding: 0.8rem 0.85rem;
@@ -1543,17 +1578,20 @@ textarea {
     padding: 0;
   }
 
+  /* --- Panels & cards --- */
   .page-card,
   .profile-card,
   .feed-shell,
   .home-preview,
   .empty-panel,
   .auth-card,
-  .side-panel {
+  .side-panel,
+  .gate-panel {
     padding: 1rem;
     border-radius: 20px;
   }
 
+  /* --- Profile --- */
   .profile-shell {
     margin-top: 0.9rem;
     gap: 0.85rem;
@@ -1601,11 +1639,6 @@ textarea {
     width: 100%;
   }
 
-  .preview-grid .feed-card.compact {
-    height: auto;
-    min-height: 0;
-  }
-
   .profile-feed-header h2 {
     font-size: 2.05rem;
   }
@@ -1615,14 +1648,48 @@ textarea {
     margin: 0 auto;
   }
 
+  /* --- Home preview cards --- */
+  .preview-grid .feed-card.compact {
+    height: auto;
+    min-height: 0;
+  }
+
+  /* --- Misc --- */
   .empty-panel p {
-    max-width: 24ch;
+    max-width: 28ch;
     margin-left: auto;
     margin-right: auto;
   }
 
+  .section-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .feed-card h3 {
+    font-size: clamp(1.7rem, 5vw, 2.5rem);
+  }
+
+  /* Modal close button stays in place (already sized at 2.75rem from base) */
   .close-modal-icon {
     top: 0.55rem;
     right: 0.65rem;
+  }
+
+  /* Modal poem body already has clamp min of 1.4rem from base */
+  .post-modal {
+    border-radius: 16px;
+  }
+
+  /* Admin actions on mobile: grow to fill row naturally */
+  .admin-actions {
+    flex-wrap: wrap;
+  }
+
+  .admin-actions > .ghost-btn,
+  .admin-actions > .danger-btn {
+    flex: 1 1 auto;
+    justify-content: center;
   }
 }
