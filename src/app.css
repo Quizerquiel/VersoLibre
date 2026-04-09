@@ -874,6 +874,13 @@ textarea {
   width: 2.8rem;
   height: 2.8rem;
   flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.user-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .user-chip small {

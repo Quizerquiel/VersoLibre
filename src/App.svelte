@@ -1238,6 +1238,7 @@
   $: totalPoems = poems.length;
   $: totalAuthors = new Set(poems.map((poem) => poem.author.toLowerCase())).size;
   $: totalCategories = CATEGORY_OPTIONS.length;
+  $: usersById = new Map(users.map((user) => [user.id, user]));
   $: userPoems = currentUser ? poems.filter((poem) => poem.ownerId === currentUser.id) : [];
   $: viewedProfile = users.find((user) => user.id === viewedProfileId) || null;
   $: viewedProfileVisible = canViewProfile(viewedProfile);
@@ -1249,7 +1250,7 @@
       )
     : [];
   $: activePoem = poems.find((poem) => poem.id === activePoemId) || null;
-  $: activePoemOwner = activePoem ? users.find((user) => user.id === activePoem.ownerId) || null : null;
+  $: activePoemOwner = activePoem ? usersById.get(activePoem.ownerId) || null : null;
   $: currentActorId = currentUser?.id || "";
   $: reactionStatsByPoem = reactions.reduce((acc, item) => {
     if (!acc[item.poemId]) {
@@ -1496,12 +1497,19 @@
           {#if visiblePoems.length}
             <div class="feed-list">
               {#each visiblePoems as poem (poem.id)}
+                {@const poemOwner = usersById.get(poem.ownerId)}
                 <article class="feed-card">
                 <div class="feed-card-top">
                   <button class="user-chip author-link-btn" type="button" on:click={() => openAuthorProfile(poem.ownerId)}>
-                    <span class="user-avatar">{initials(poem.author)}</span>
+                    <span class="user-avatar">
+                      {#if poemOwner?.profileImage}
+                        <img src={poemOwner.profileImage} alt={`Foto de perfil de ${poemOwner.name}`} class="user-avatar-image" />
+                      {:else}
+                        {initials(poem.author)}
+                      {/if}
+                    </span>
                     <div>
-                      <strong>{poem.author}</strong>
+                      <strong>@{poemOwner?.username || poem.author}</strong>
                       <small>{formatRelative(poem.createdAt)}</small>
                     </div>
                   </button>
@@ -2110,7 +2118,13 @@
         <div class="post-modal" role="dialog" aria-modal="true" aria-label={`Publicación ${activePoem.title}`}>
           <header class="post-modal-header">
             <button class="user-chip author-link-btn" type="button" on:click={() => openAuthorProfile(activePoem.ownerId)}>
-              <span class="user-avatar">{initials(activePoem.author)}</span>
+              <span class="user-avatar">
+                {#if activePoemOwner?.profileImage}
+                  <img src={activePoemOwner.profileImage} alt={`Foto de perfil de ${activePoemOwner.name}`} class="user-avatar-image" />
+                {:else}
+                  {initials(activePoem.author)}
+                {/if}
+              </span>
               <div>
                 <strong>@{activePoemOwner?.username || activePoem.author}</strong>
                 <small>{formatDate(activePoem.createdAt)}</small>
