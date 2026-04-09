@@ -30,6 +30,7 @@
   let authUser = null;
   let authSession = null;
   let sessionUserId = "";
+  let authReady = false;
   let currentPath = typeof window !== "undefined" ? window.location.pathname.replace(/\/+$/, "") || "/" : "/";
   let visibleCount = FEED_BATCH;
   let searchQuery = "";
@@ -193,6 +194,7 @@
   async function bootstrapState() {
     if (!isSupabaseConfigured || !supabase) {
       announcement = "Configura Supabase para activar autenticacion y base de datos real.";
+      authReady = true;
       return;
     }
 
@@ -209,7 +211,9 @@
       if (authUser) {
         void ensureProfile(authUser);
       }
-    } finally {}
+    } finally {
+      authReady = true;
+    }
 
     refreshData().catch(() => {});
   }
@@ -1054,6 +1058,10 @@
           comments = [];
         }
 
+        if (["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED", "SIGNED_OUT"].includes(event)) {
+          authReady = true;
+        }
+
       });
       authListener = authSubscription?.data?.subscription || null;
 
@@ -1591,7 +1599,12 @@
       </section>
     {:else if currentPath === "/perfil"}
       <section class="profile-shell">
-        {#if currentUser}
+        {#if !authReady}
+          <div class="gate-panel">
+            <h3>Cargando tu sesión...</h3>
+            <p>Estamos restaurando tu acceso, un momento.</p>
+          </div>
+        {:else if currentUser}
           <aside class="profile-card">
             <input
               bind:this={profilePhotoInput}
@@ -1761,7 +1774,12 @@
       </section>
     {:else if currentPath === "/configuracion"}
       <section class="page-card">
-        {#if currentUser}
+        {#if !authReady}
+          <div class="gate-panel">
+            <h3>Cargando tu sesión...</h3>
+            <p>Estamos restaurando tu acceso, un momento.</p>
+          </div>
+        {:else if currentUser}
           <section class="settings-panel standalone-settings">
             <div class="section-title">
               <div>
