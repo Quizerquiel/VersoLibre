@@ -1118,11 +1118,16 @@ textarea {
   object-fit: cover;
 }
 
+.profile-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
 .profile-photo-link {
-  margin: -0.4rem 0 0.8rem;
-  display: block;
-  width: 100%;
-  text-align: center;
+  margin: 0;
+  text-align: left;
 }
 
 .bio-block {
@@ -1562,11 +1567,20 @@ textarea {
   .profile-avatar {
     width: 4rem;
     height: 4rem;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0;
+  }
+
+  .profile-photo-row {
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
   }
 
   .profile-photo-link {
-    margin: -0.15rem 0 0.7rem;
+    width: 100%;
+    text-align: center;
   }
 
   .profile-card h2 {

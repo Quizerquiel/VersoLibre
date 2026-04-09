@@ -1645,14 +1645,16 @@
               accept="image/*"
               on:change={handleProfilePhotoChange}
             />
-            <button class="profile-avatar profile-avatar-button" type="button" on:click={promptProfilePhoto} aria-label="Cambiar foto de perfil">
-              {#if currentUser.profileImage}
-                <img src={currentUser.profileImage} alt={`Foto de perfil de ${currentUser.name}`} class="profile-avatar-image" />
-              {:else}
-                {initials(currentUser.name)}
-              {/if}
-            </button>
-            <button class="text-link profile-photo-link" type="button" on:click={promptProfilePhoto}>Añadir foto de perfil</button>
+            <div class="profile-photo-row">
+              <button class="profile-avatar profile-avatar-button" type="button" on:click={promptProfilePhoto} aria-label="Cambiar foto de perfil">
+                {#if currentUser.profileImage}
+                  <img src={currentUser.profileImage} alt={`Foto de perfil de ${currentUser.name}`} class="profile-avatar-image" />
+                {:else}
+                  {initials(currentUser.name)}
+                {/if}
+              </button>
+              <button class="text-link profile-photo-link" type="button" on:click={promptProfilePhoto}>Añadir foto de perfil</button>
+            </div>
             <h2>{currentUser.name}</h2>
             <p class="username">@{currentUser.username}</p>
             {#if currentUser.role === "admin"}
