@@ -1,0 +1,66 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="80" y1="20" x2="1120" y2="610" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8F1E9" />
+      <stop offset="0.55" stop-color="#F2E5D8" />
+      <stop offset="1" stop-color="#F8F4EE" />
+    </linearGradient>
+    <radialGradient id="spotA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(180 80) rotate(14) scale(260 180)">
+      <stop stop-color="#D9A14A" stop-opacity="0.32" />
+      <stop offset="1" stop-color="#D9A14A" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="spotB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1050 60) rotate(178) scale(260 170)">
+      <stop stop-color="#B2462F" stop-opacity="0.22" />
+      <stop offset="1" stop-color="#B2462F" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <rect width="1200" height="630" fill="url(#spotA)" />
+  <rect width="1200" height="630" fill="url(#spotB)" />
+
+  <g opacity="0.12" stroke="#26170F" stroke-width="1">
+    <path d="M0 60H1200" />
+    <path d="M0 120H1200" />
+    <path d="M0 180H1200" />
+    <path d="M0 240H1200" />
+    <path d="M0 300H1200" />
+    <path d="M0 360H1200" />
+    <path d="M0 420H1200" />
+    <path d="M0 480H1200" />
+    <path d="M0 540H1200" />
+    <path d="M0 600H1200" />
+    <path d="M60 0V630" />
+    <path d="M120 0V630" />
+    <path d="M180 0V630" />
+    <path d="M240 0V630" />
+    <path d="M300 0V630" />
+    <path d="M360 0V630" />
+    <path d="M420 0V630" />
+    <path d="M480 0V630" />
+    <path d="M540 0V630" />
+    <path d="M600 0V630" />
+    <path d="M660 0V630" />
+    <path d="M720 0V630" />
+    <path d="M780 0V630" />
+    <path d="M840 0V630" />
+    <path d="M900 0V630" />
+    <path d="M960 0V630" />
+    <path d="M1020 0V630" />
+    <path d="M1080 0V630" />
+    <path d="M1140 0V630" />
+  </g>
+
+  <rect x="78" y="96" width="1044" height="438" rx="36" fill="#FFFAF5" fill-opacity="0.88" stroke="#EADFD5" />
+
+  <circle cx="182" cy="217" r="62" fill="#B2462F" />
+  <text x="182" y="236" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="60" font-weight="700" fill="#FFF8F1">VL</text>
+
+  <text x="286" y="188" font-family="Georgia, 'Times New Roman', serif" font-size="28" font-weight="700" letter-spacing="5" fill="#B2462F">COMUNIDAD POETICA</text>
+  <text x="286" y="272" font-family="Georgia, 'Times New Roman', serif" font-size="96" font-weight="700" fill="#26170F">VersoLibre</text>
+  <text x="286" y="346" font-family="Georgia, 'Times New Roman', serif" font-size="38" fill="#6F5D52">Lee, publica y descubre poemas</text>
+  <text x="286" y="398" font-family="Georgia, 'Times New Roman', serif" font-size="38" fill="#6F5D52">en una comunidad con identidad.</text>
+
+  <rect x="286" y="438" width="380" height="58" rx="29" fill="#B2462F" />
+  <text x="476" y="475" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="30" font-weight="700" fill="#FFF8F1">verso-libre.vercel.app</text>
+</svg>
